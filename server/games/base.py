@@ -425,13 +425,6 @@ class Game(ABC, DataClassJSONMixin):
         if self.current_ambience:
             user.play_ambience(self.current_ambience)
 
-    def get_player_by_id(self, player_id: str) -> Player | None:
-        """Get a player by their ID."""
-        for player in self.players:
-            if player.id == player_id:
-                return player
-        return None
-
     def get_user(self, player: Player) -> User | None:
         """Get the user for a player."""
         return self._users.get(player.id)
