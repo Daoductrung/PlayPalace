@@ -248,17 +248,20 @@ def build(
     user = game.get_user(player)
     if user:
         building_name = get_building_name(building_type, user.locale)
-        user.speak_l("ageofheroes-construction-done-you", building=building_name)
+        article = "an" if building_type == BuildingType.ARMY else "a"
+        user.speak_l("ageofheroes-construction-done-you", building=building_name, article=article)
 
     for p in game.players:
         if p != player:
             other_user = game.get_user(p)
             if other_user:
                 building_name = get_building_name(building_type, other_user.locale)
+                article = "an" if building_type == BuildingType.ARMY else "a"
                 other_user.speak_l(
                     "ageofheroes-construction-done",
                     player=player.name,
                     building=building_name,
+                    article=article,
                 )
 
     return True

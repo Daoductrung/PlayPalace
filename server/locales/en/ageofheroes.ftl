@@ -162,10 +162,13 @@ ageofheroes-tax-no-city-done-you = Tax Collection: You exchanged { $card } for a
 
 # Construction
 ageofheroes-construction-menu = What do you want to build?
-ageofheroes-construction-done = { $player } built a { $building }.
-ageofheroes-construction-done-you = You built a { $building }.
+ageofheroes-construction-done = { $player } built { $article } { $building }.
+ageofheroes-construction-done-you = You built { $article } { $building }.
 ageofheroes-construction-stop = Stop building
 ageofheroes-construction-stopped = You decided to stop building.
+ageofheroes-road-select-neighbor = Select which neighbor to build a road to.
+ageofheroes-direction-left = To your left
+ageofheroes-direction-right = To your right
 ageofheroes-road-request = { $player } requests permission to build a road to your tribe. Accept?
 ageofheroes-road-accepted = { $player } agreed to build a road with you.
 ageofheroes-road-rejected = { $player } declined your road request.
@@ -180,7 +183,13 @@ ageofheroes-do-nothing-you = You pass...
 # War
 ageofheroes-war-declare = { $attacker } declares war on { $defender }! Goal: { $goal }.
 ageofheroes-war-prepare = Select your armies for { $action }.
-ageofheroes-war-no-army = You have no armies available.
+ageofheroes-war-no-army = You have no armies or hero cards available.
+ageofheroes-war-no-targets = No valid targets for war.
+ageofheroes-war-no-valid-goal = No valid war goals against this target.
+ageofheroes-war-select-target = Select which player to attack.
+ageofheroes-war-select-goal = Select your war goal.
+ageofheroes-war-prepare-attack = Select your attacking forces. Use +/- to adjust armies, generals, and heroes.
+ageofheroes-war-prepare-defense = { $attacker } is attacking you! Select your defending forces.
 ageofheroes-war-select-armies = Select armies: { $count }
 ageofheroes-war-select-generals = Select generals: { $count }
 ageofheroes-war-select-heroes = Select heroes: { $count }
@@ -269,8 +278,8 @@ ageofheroes-yes = Yes
 ageofheroes-no = No
 
 # Monument progress
-ageofheroes-monument-progress = { $player }'s monument is { $percent }% complete ({ $count }/5).
-ageofheroes-monument-progress-you = Your monument is { $percent }% complete ({ $count }/5).
+ageofheroes-monument-progress = { $player }'s monument is { $count }/5 complete.
+ageofheroes-monument-progress-you = Your monument is { $count }/5 complete.
 
 # Hand management
 ageofheroes-discard-excess = You have more than { $max } cards. Discard { $count } { $count ->
@@ -296,6 +305,13 @@ ageofheroes-game-over = Game Over.
 ageofheroes-eliminated = { $player } has been eliminated.
 ageofheroes-eliminated-you = You have been eliminated.
 
+# Hand
+ageofheroes-hand-empty = You have no cards.
+ageofheroes-hand-contents = Your hand ({ $count } { $count ->
+    [one] card
+    *[other] cards
+}): { $cards }
+
 # Status
 ageofheroes-status = { $player } ({ $tribe }): { $cities } { $cities ->
     [one] city
@@ -309,7 +325,7 @@ ageofheroes-status-cities = Cities: { $count }
 ageofheroes-status-armies = Armies: { $count }
 ageofheroes-status-generals = Generals: { $count }
 ageofheroes-status-fortresses = Fortresses: { $count }
-ageofheroes-status-monument = Monument: { $count }/5 ({ $percent }%)
+ageofheroes-status-monument = Monument: { $count }/5
 ageofheroes-status-roads = Roads: { $left }{ $right }
 ageofheroes-status-road-left = left
 ageofheroes-status-road-right = right

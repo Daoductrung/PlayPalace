@@ -21,8 +21,14 @@ def can_declare_war(game: AgeOfHeroesGame, player: AgeOfHeroesPlayer) -> str | N
     if not player.tribe_state:
         return "No tribe state"
 
-    # Need at least one available army
-    if player.tribe_state.get_available_armies() < 1:
+    # Need at least one available army OR a hero card (heroes can substitute for armies)
+    available_armies = player.tribe_state.get_available_armies()
+    hero_count = sum(
+        1 for card in player.hand
+        if card.card_type == CardType.EVENT and card.subtype == EventType.HERO
+    )
+
+    if available_armies < 1 and hero_count < 1:
         return "ageofheroes-war-no-army"
 
     # Need at least one valid target

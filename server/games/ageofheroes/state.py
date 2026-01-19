@@ -36,8 +36,11 @@ class PlaySubPhase(str, Enum):
     SELECT_ACTION = "select_action"  # Player chooses action
     TAX_COLLECTION = "tax_collection"  # Performing tax collection
     CONSTRUCTION = "construction"  # Building things
+    ROAD_TARGET = "road_target"  # Selecting which neighbor to build road to
     WAR_DECLARE = "war_declare"  # Selecting war target and goal
-    WAR_PREPARE = "war_prepare"  # Both sides selecting armies
+    WAR_PREPARE_ATTACKER = "war_prepare_attacker"  # Attacker selecting forces
+    WAR_PREPARE_DEFENDER = "war_prepare_defender"  # Defender selecting forces
+    WAR_PREPARE = "war_prepare"  # Both sides selecting armies (bot handling)
     WAR_BATTLE = "war_battle"  # Dice rolling combat
     DISCARD_EXCESS = "discard_excess"  # Discard to max hand size
 
