@@ -341,6 +341,19 @@ class AgeOfHeroesGame(Game):
             )
         )
 
+        # Discard excess cards actions (one per potential card in hand)
+        for i in range(10):  # Max potential hand size
+            action_set.add(
+                Action(
+                    id=f"discard_card_{i}",
+                    label="",
+                    handler="_action_discard_card",
+                    is_enabled="_is_discard_enabled",
+                    is_hidden="_is_discard_card_hidden",
+                    get_label="_get_discard_card_label",
+                )
+            )
+
         # Status actions (keybind only)
         action_set.add(
             Action(
@@ -624,6 +637,56 @@ class AgeOfHeroesGame(Game):
         user = self.get_user(player)
         locale = user.locale if user else "en"
         return Localization.get(locale, "ageofheroes-cancel")
+
+    def _is_discard_enabled(self, player: Player) -> str | None:
+        """Discard is enabled when player has excess cards."""
+        if self.status != "playing":
+            return "ageofheroes-game-not-started"
+        if not isinstance(player, AgeOfHeroesPlayer):
+            return "Invalid player"
+        if player.pending_discard <= 0:
+            return "No cards to discard"
+        return None
+
+    def _is_discard_card_hidden(self, player: Player, action_id: str) -> Visibility:
+        """Discard card actions hidden if not in discard phase or card out of range."""
+        if self.sub_phase != PlaySubPhase.DISCARD_EXCESS:
+            return Visibility.HIDDEN
+        if not isinstance(player, AgeOfHeroesPlayer):
+            return Visibility.HIDDEN
+        if player.pending_discard <= 0:
+            return Visibility.HIDDEN
+
+        # Extract card index from action_id
+        try:
+            card_index = int(action_id.replace("discard_card_", ""))
+        except ValueError:
+            return Visibility.HIDDEN
+
+        # Hide if card index out of range
+        if card_index >= len(player.hand):
+            return Visibility.HIDDEN
+
+        return Visibility.VISIBLE
+
+    def _get_discard_card_label(self, player: Player, action_id: str) -> str:
+        """Get label for discard card action - just the card name."""
+        if not isinstance(player, AgeOfHeroesPlayer):
+            return ""
+
+        # Extract card index from action_id
+        try:
+            card_index = int(action_id.replace("discard_card_", ""))
+        except ValueError:
+            return ""
+
+        if card_index >= len(player.hand):
+            return ""
+
+        card = player.hand[card_index]
+        user = self.get_user(player)
+        locale = user.locale if user else "en"
+        return get_card_name(card, locale)
 
     # ==========================================================================
     # Action Handlers
@@ -1404,6 +1467,51 @@ class AgeOfHeroesGame(Game):
 
         player.pending_offer_card_index = -1
         self.rebuild_all_menus()
+
+    def _action_discard_card(self, player: Player, action_id: str) -> None:
+        """Handle discard card action - remove selected card from hand."""
+        if not isinstance(player, AgeOfHeroesPlayer):
+            return
+
+        if self.sub_phase != PlaySubPhase.DISCARD_EXCESS:
+            return
+
+        if player.pending_discard <= 0:
+            return
+
+        # Extract card index from action_id
+        try:
+            card_index = int(action_id.replace("discard_card_", ""))
+        except ValueError:
+            return
+
+        if card_index >= len(player.hand):
+            return
+
+        # Remove the card
+        card = player.hand.pop(card_index)
+        self.discard_pile.append(card)
+        player.pending_discard -= 1
+
+        # Announce
+        user = self.get_user(player)
+        if user:
+            card_name = get_card_name(card, user.locale)
+            user.speak_l("ageofheroes-discard-card-you", card=card_name)
+        self._broadcast_discard(player, card)
+
+        # Check if more discards needed
+        if player.pending_discard > 0:
+            user = self.get_user(player)
+            if user:
+                user.speak_l(
+                    "ageofheroes-discard-more",
+                    count=player.pending_discard,
+                )
+            self.rebuild_all_menus()
+        else:
+            # Done discarding, end turn
+            self._end_turn()
 
     def _bot_do_trading(self, player: AgeOfHeroesPlayer) -> None:
         """Bot performs trading actions during fair phase."""

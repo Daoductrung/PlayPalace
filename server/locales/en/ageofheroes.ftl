@@ -278,6 +278,10 @@ ageofheroes-discard-excess = You have more than { $max } cards. Discard { $count
     *[other] cards
 }.
 ageofheroes-discard-excess-other = { $player } must discard excess cards.
+ageofheroes-discard-more = Discard { $count } more { $count ->
+    [one] card
+    *[other] cards
+}.
 
 # Victory
 ageofheroes-victory-cities = { $player } has built 5 cities! Empire of Five Cities.
