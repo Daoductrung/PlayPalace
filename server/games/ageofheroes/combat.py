@@ -687,3 +687,165 @@ def use_fortune_reroll(game: AgeOfHeroesGame, player: AgeOfHeroesPlayer) -> bool
             game.play_sound("game_ageofheroes/fortune.ogg")
             return True
     return False
+
+
+def jolt_war_bots(game: AgeOfHeroesGame) -> None:
+    """Jolt bot players to roll dice in war."""
+    active_players = game.get_active_players()
+    war = game.war_state
+
+    if war.attacker_index < len(active_players):
+        attacker = active_players[war.attacker_index]
+        if attacker.is_bot and war.attacker_roll == 0:
+            # Clear any pending action and set to roll immediately next tick
+            attacker.bot_pending_action = None
+            attacker.bot_think_ticks = 1  # Will call bot_think on next tick
+
+    if war.defender_index < len(active_players):
+        defender = active_players[war.defender_index]
+        if defender.is_bot and war.defender_roll == 0:
+            # Clear any pending action and set to roll immediately next tick
+            defender.bot_pending_action = None
+            defender.bot_think_ticks = 1  # Will call bot_think on next tick
+
+
+def resolve_war_round(game: AgeOfHeroesGame) -> None:
+    """Resolve one round of war battle after both players have rolled."""
+    # Resolve the round
+    resolve_battle_round(game)
+
+    # Check if battle is over
+    if is_battle_over(game):
+        # Battle is finished
+        finish_war_battle(game)
+    else:
+        # Continue to next round - reset rolls
+        game.war_state.reset_round_rolls()
+        game.rebuild_all_menus()
+
+        # Jolt both bots to roll for next round
+        active_players = game.get_active_players()
+        war = game.war_state
+        if war.attacker_index < len(active_players):
+            attacker = active_players[war.attacker_index]
+            if attacker.is_bot:
+                attacker.bot_think_ticks = 0
+                attacker.bot_pending_action = None
+        if war.defender_index < len(active_players):
+            defender = active_players[war.defender_index]
+            if defender.is_bot:
+                defender.bot_think_ticks = 0
+                defender.bot_pending_action = None
+
+
+def execute_war_battle(game: AgeOfHeroesGame) -> None:
+    """Start the interactive war battle after both sides have prepared forces.
+
+    Players will now click to roll dice each round instead of automatic resolution.
+    """
+    from .state import PlaySubPhase
+
+    # Announce battle start with army counts
+    active_players = game.get_active_players()
+    war = game.war_state
+
+    if war.attacker_index < len(active_players) and war.defender_index < len(active_players):
+        attacker = active_players[war.attacker_index]
+        defender = active_players[war.defender_index]
+
+        att_armies = war.get_attacker_total_armies()
+        def_armies = war.get_defender_total_armies()
+
+        # Announce battle start
+        game.broadcast_l(
+            "ageofheroes-battle-start",
+            attacker=attacker.name,
+            defender=defender.name,
+            att_armies=att_armies,
+            def_armies=def_armies,
+        )
+
+    # Check if battle is already over (one side has 0 armies)
+    if is_battle_over(game):
+        # Battle is already over without needing to roll
+        finish_war_battle(game)
+        return
+
+    # Enter interactive battle mode
+    game.sub_phase = PlaySubPhase.WAR_BATTLE
+    war.battle_in_progress = True
+    war.reset_round_rolls()
+
+    # Rebuild menus to show "Roll dice" button
+    game.rebuild_all_menus()
+
+    # Jolt both bots to act immediately (set think ticks to 0)
+    active_players = game.get_active_players()
+    if war.attacker_index < len(active_players):
+        attacker = active_players[war.attacker_index]
+        if attacker.is_bot:
+            attacker.bot_think_ticks = 0
+            attacker.bot_pending_action = None
+    if war.defender_index < len(active_players):
+        defender = active_players[war.defender_index]
+        if defender.is_bot:
+            defender.bot_think_ticks = 0
+            defender.bot_pending_action = None
+
+
+def finish_war_battle(game: AgeOfHeroesGame) -> None:
+    """Finish the war battle and apply outcome."""
+    active_players = game.get_active_players()
+    war = game.war_state
+
+    # Save attacker/defender info BEFORE applying outcome (which resets war state)
+    winner = get_battle_winner(game)
+
+    attacker_name = None
+    defender_name = None
+    if war.attacker_index < len(active_players) and war.defender_index < len(active_players):
+        attacker = active_players[war.attacker_index]
+        defender = active_players[war.defender_index]
+        attacker_name = attacker.name
+        defender_name = defender.name
+
+    # Apply war outcome (this may reset war state)
+    apply_war_outcome(game)
+
+    # Announce battle end summary
+    if attacker_name and defender_name:
+        if winner == "attacker":
+            game.broadcast_l(
+                "ageofheroes-battle-victory-attacker",
+                attacker=attacker_name,
+                defender=defender_name,
+            )
+        elif winner == "defender":
+            game.broadcast_l(
+                "ageofheroes-battle-victory-defender",
+                attacker=attacker_name,
+                defender=defender_name,
+            )
+        else:
+            game.broadcast_l(
+                "ageofheroes-battle-mutual-defeat",
+                attacker=attacker_name,
+                defender=defender_name,
+            )
+
+    # Check for elimination of both players
+    if war.attacker_index < len(active_players):
+        attacker = active_players[war.attacker_index]
+        game._check_elimination(attacker)
+
+    if war.defender_index < len(active_players):
+        defender = active_players[war.defender_index]
+        game._check_elimination(defender)
+
+    # Reset war state and end action
+    attacker_idx = war.attacker_index
+    war.reset()
+
+    if attacker_idx < len(active_players):
+        attacker = active_players[attacker_idx]
+        game._end_action(attacker)

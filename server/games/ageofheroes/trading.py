@@ -3,8 +3,9 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-from .cards import Card, CardType, SpecialResourceType, get_card_name
+from .cards import Card, CardType, ResourceType, SpecialResourceType, EventType, get_card_name
 from .state import TradeOffer, TRIBE_SPECIAL_RESOURCE
+from ...messages.localization import Localization
 
 if TYPE_CHECKING:
     from .game import AgeOfHeroesGame, AgeOfHeroesPlayer
@@ -272,8 +273,6 @@ def format_offer(
 
     # Format wanted
     if offer.wanted_type is None and offer.wanted_subtype is None:
-        from ...messages.localization import Localization
-
         wanted_name = Localization.get(locale, "ageofheroes-any-card")
     elif offer.wanted_subtype is not None:
         # Create a dummy card for name lookup
@@ -283,3 +282,191 @@ def format_offer(
         wanted_name = offer.wanted_type or ""
 
     return f"{offerer.name}: {offered_name} -> {wanted_name}"
+
+
+def announce_offer(
+    game: AgeOfHeroesGame, player: AgeOfHeroesPlayer, offered_card: Card, wanted_subtype: str | None
+) -> None:
+    """Announce a trade offer."""
+    for p in game.players:
+        user = game.get_user(p)
+        if user:
+            offered_name = get_card_name(offered_card, user.locale)
+
+            # Get wanted name based on type
+            if wanted_subtype is None:
+                wanted_name = Localization.get(user.locale, "ageofheroes-any-card")
+            elif wanted_subtype in [r for r in ResourceType]:
+                wanted_card = Card(id=-1, card_type=CardType.RESOURCE, subtype=wanted_subtype)
+                wanted_name = get_card_name(wanted_card, user.locale)
+            elif wanted_subtype in [s for s in SpecialResourceType]:
+                wanted_card = Card(id=-1, card_type=CardType.SPECIAL, subtype=wanted_subtype)
+                wanted_name = get_card_name(wanted_card, user.locale)
+            elif wanted_subtype in [e for e in EventType]:
+                wanted_card = Card(id=-1, card_type=CardType.EVENT, subtype=wanted_subtype)
+                wanted_name = get_card_name(wanted_card, user.locale)
+            else:
+                wanted_name = wanted_subtype
+
+            if p == player:
+                user.speak_l(
+                    "ageofheroes-offer-made-you",
+                    card=offered_name,
+                    wanted=wanted_name,
+                )
+            else:
+                user.speak_l(
+                    "ageofheroes-offer-made",
+                    player=player.name,
+                    card=offered_name,
+                    wanted=wanted_name,
+                )
+
+
+def check_and_execute_trades(game: AgeOfHeroesGame) -> bool:
+    """Check for matching offers and execute trades. Returns True if any trade made."""
+    trades_made = False
+    active_players = game.get_active_players()
+
+    # Check all pairs of offers for matches
+    i = 0
+    while i < len(game.trade_offers):
+        offer1 = game.trade_offers[i]
+        if offer1.player_index >= len(active_players):
+            i += 1
+            continue
+
+        player1 = active_players[offer1.player_index]
+        if not hasattr(player1, "hand"):
+            i += 1
+            continue
+
+        if offer1.card_index >= len(player1.hand):
+            i += 1
+            continue
+
+        card1 = player1.hand[offer1.card_index]
+
+        j = i + 1
+        while j < len(game.trade_offers):
+            offer2 = game.trade_offers[j]
+            if offer2.player_index >= len(active_players):
+                j += 1
+                continue
+            if offer2.player_index == offer1.player_index:
+                j += 1
+                continue
+
+            player2 = active_players[offer2.player_index]
+            if not hasattr(player2, "hand"):
+                j += 1
+                continue
+
+            if offer2.card_index >= len(player2.hand):
+                j += 1
+                continue
+
+            card2 = player2.hand[offer2.card_index]
+
+            # Check if offers match
+            # offer1 wants what player2 offers, and offer2 wants what player1 offers
+            match1 = (
+                (offer1.wanted_type is None or offer1.wanted_type == card2.card_type)
+                and (offer1.wanted_subtype is None or offer1.wanted_subtype == card2.subtype)
+            )
+            match2 = (
+                (offer2.wanted_type is None or offer2.wanted_type == card1.card_type)
+                and (offer2.wanted_subtype is None or offer2.wanted_subtype == card1.subtype)
+            )
+
+            if match1 and match2:
+                # Check special resource restrictions
+                # Special resources can only go to the tribe that needs them
+                valid = True
+                if card1.card_type == CardType.SPECIAL:
+                    needed_by = None
+                    for tribe, special in TRIBE_SPECIAL_RESOURCE.items():
+                        if special == card1.subtype:
+                            needed_by = tribe
+                            break
+                    if needed_by and hasattr(player2, "tribe_state") and player2.tribe_state:
+                        if player2.tribe_state.tribe != needed_by:
+                            valid = False
+
+                if card2.card_type == CardType.SPECIAL:
+                    needed_by = None
+                    for tribe, special in TRIBE_SPECIAL_RESOURCE.items():
+                        if special == card2.subtype:
+                            needed_by = tribe
+                            break
+                    if needed_by and hasattr(player1, "tribe_state") and player1.tribe_state:
+                        if player1.tribe_state.tribe != needed_by:
+                            valid = False
+
+                if valid:
+                    # Execute the trade
+                    execute_matched_trade(game, player1, offer1, player2, offer2)
+                    trades_made = True
+                    # Restart search since indices changed
+                    i = 0
+                    break
+
+            j += 1
+        else:
+            i += 1
+            continue
+        break  # Restart outer loop after trade
+
+    return trades_made
+
+
+def execute_matched_trade(
+    game: AgeOfHeroesGame,
+    player1: AgeOfHeroesPlayer,
+    offer1: TradeOffer,
+    player2: AgeOfHeroesPlayer,
+    offer2: TradeOffer,
+) -> None:
+    """Execute a matched trade between two players."""
+    card1 = player1.hand[offer1.card_index]
+    card2 = player2.hand[offer2.card_index]
+
+    # Swap cards
+    player1.hand[offer1.card_index] = card2
+    player2.hand[offer2.card_index] = card1
+
+    # Remove offers
+    if offer1 in game.trade_offers:
+        game.trade_offers.remove(offer1)
+    if offer2 in game.trade_offers:
+        game.trade_offers.remove(offer2)
+
+    # Announce trade
+    game.play_sound("game_ageofheroes/trade.ogg")
+
+    for p in game.players:
+        user = game.get_user(p)
+        if user:
+            card1_name = get_card_name(card1, user.locale)
+            card2_name = get_card_name(card2, user.locale)
+
+            if p == player1:
+                user.speak_l(
+                    "ageofheroes-trade-accepted-you",
+                    other=player2.name,
+                    receive=card2_name,
+                )
+            elif p == player2:
+                user.speak_l(
+                    "ageofheroes-trade-accepted-you",
+                    other=player1.name,
+                    receive=card1_name,
+                )
+            else:
+                user.speak_l(
+                    "ageofheroes-trade-accepted",
+                    player=player1.name,
+                    other=player2.name,
+                    give=card1_name,
+                    receive=card2_name,
+                )

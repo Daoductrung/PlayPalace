@@ -7,6 +7,7 @@ from .cards import Card, CardType, ResourceType, get_card_name
 from .state import (
     BuildingType,
     BUILDING_COSTS,
+    PlaySubPhase,
     get_building_name,
 )
 
@@ -339,3 +340,109 @@ def get_construction_menu_items(
             items.append((building_type, label))
 
     return items
+
+
+def execute_single_build(
+    game: AgeOfHeroesGame, player: AgeOfHeroesPlayer, building_type: str, auto_road: bool = False
+) -> bool:
+    """Execute building a single item. Returns True if successful, False otherwise.
+
+    Args:
+        game: The game instance
+        player: The player building
+        building_type: Type of building to construct
+        auto_road: If True, automatically build road to first target (for bots)
+
+    Returns:
+        True if building was successful, False if it failed or victory occurred
+    """
+    # Import here to avoid circular import at module level
+    from ...game_utils.bot_helper import BotHelper
+
+    if not player.tribe_state:
+        return False
+
+    # Handle road building specially (needs neighbor selection/permission)
+    if building_type == BuildingType.ROAD:
+        targets = get_road_targets(game, player)
+        if not targets:
+            return False
+
+        if auto_road:
+            # Bot mode: Select first target and send permission request
+            target_index, direction = targets[0]
+            active_players = game.get_active_players()
+            builder_index = active_players.index(player)
+
+            # Store the road request
+            player.pending_road_targets = targets
+            game.road_request_from = builder_index
+            game.road_request_to = target_index
+
+            # Enter road permission subphase
+            game.sub_phase = PlaySubPhase.ROAD_PERMISSION
+            game.rebuild_all_menus()
+
+            # Notify target player
+            if target_index < len(active_players):
+                target = active_players[target_index]
+                target_user = game.get_user(target)
+                if target_user:
+                    target_user.speak_l("ageofheroes-road-request-received", requester=player.name)
+
+                # If target is also a bot, have them auto-respond
+                if target.is_bot:
+                    BotHelper.jolt_bot(target, ticks=5)
+
+            # Road request sent, waiting for response
+            return True
+        else:
+            # Human mode: Return False to indicate road needs selection menu
+            # (caller should handle this)
+            return False
+
+    # Build the selected building
+    if not build(game, player, building_type):
+        return False
+
+    # Check for city victory
+    if building_type == BuildingType.CITY:
+        if player.tribe_state.cities >= game.options.victory_cities:
+            game._declare_victory(player, "cities")
+            return False  # Don't continue building after victory
+
+    return True
+
+
+def start_construction(game: AgeOfHeroesGame, player: AgeOfHeroesPlayer) -> None:
+    """Start construction action.
+
+    Args:
+        game: The game instance
+        player: The player starting construction
+    """
+    # Import here to avoid circular import at module level
+    from . import bot as bot_ai
+
+    if not player.tribe_state:
+        game._end_action(player)
+        return
+
+    affordable = get_affordable_buildings(game, player)
+    if not affordable:
+        user = game.get_user(player)
+        if user:
+            user.speak_l("ageofheroes-no-resources")
+        # Don't end action - return to action selection
+        return
+
+    # For bots, auto-select what to build
+    if player.is_bot:
+        bot_ai.bot_perform_construction(game, player)
+    else:
+        # Show construction menu for human players
+        game.sub_phase = PlaySubPhase.CONSTRUCTION
+        user = game.get_user(player)
+        if user:
+            user.speak_l("ageofheroes-construction-menu")
+        game.rebuild_all_menus()

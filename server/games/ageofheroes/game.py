@@ -60,6 +60,8 @@ from .construction import (
     build,
     get_road_targets,
     build_road,
+    execute_single_build,
+    start_construction,
 )
 from .trading import (
     create_offer,
@@ -70,6 +72,8 @@ from .trading import (
     get_player_offers,
     get_matching_offers,
     can_accept_offer,
+    announce_offer,
+    check_and_execute_trades,
 )
 from .combat import (
     can_declare_war,
@@ -81,8 +85,13 @@ from .combat import (
     is_battle_over,
     get_battle_winner,
     apply_war_outcome,
+    jolt_war_bots,
+    resolve_war_round,
+    execute_war_battle,
+    finish_war_battle,
 )
 from . import bot as bot_ai
+from . import events
 
 
 # Hand size limit
@@ -1451,39 +1460,9 @@ class AgeOfHeroesGame(Game):
 
         # Check if both players have rolled
         if self.war_state.is_both_rolled():
-            self._resolve_war_round()
+            resolve_war_round(self)
 
         self.rebuild_all_menus()
-
-    def _resolve_war_round(self) -> None:
-        """Resolve one round of war battle after both players have rolled."""
-        from .combat import resolve_battle_round, is_battle_over
-
-        # Resolve the round
-        resolve_battle_round(self)
-
-        # Check if battle is over
-        if is_battle_over(self):
-            # Battle is finished
-            self._finish_war_battle()
-        else:
-            # Continue to next round - reset rolls
-            self.war_state.reset_round_rolls()
-            self.rebuild_all_menus()
-
-            # Jolt both bots to roll for next round
-            active_players = self.get_active_players()
-            war = self.war_state
-            if war.attacker_index < len(active_players):
-                attacker = active_players[war.attacker_index]
-                if attacker.is_bot:
-                    attacker.bot_think_ticks = 0
-                    attacker.bot_pending_action = None
-            if war.defender_index < len(active_players):
-                defender = active_players[war.defender_index]
-                if defender.is_bot:
-                    defender.bot_think_ticks = 0
-                    defender.bot_pending_action = None
 
     def _resolve_setup_rolls(self) -> None:
         """Resolve setup dice rolls and determine turn order."""
@@ -1550,7 +1529,7 @@ class AgeOfHeroesGame(Game):
         if action_type == ActionType.TAX_COLLECTION:
             self._perform_tax_collection(player)
         elif action_type == ActionType.CONSTRUCTION:
-            self._start_construction(player)
+            start_construction(self, player)
         elif action_type == ActionType.WAR:
             self._start_war_declaration(player)
         elif action_type == ActionType.DO_NOTHING:
@@ -1775,251 +1754,10 @@ class AgeOfHeroesGame(Game):
             if not isinstance(player, AgeOfHeroesPlayer):
                 continue
 
-            self._process_player_events(player)
+            events.process_player_events(self, player)
 
         # After all events processed, move to fair phase
         self._start_fair_phase()
-
-    def _process_player_events(self, player: AgeOfHeroesPlayer) -> None:
-        """Process mandatory events for a player.
-
-        Pascal behavior:
-        - Round 1: Only Population Growth has effect, other disasters just discard
-        - Round 2+: Population Growth effect, Hunger/Barbarians effects apply,
-          Earthquake/Eruption are targetable (just discard here, play later)
-        """
-        if not player.tribe_state:
-            return
-
-        # Check if disaster effects should apply (round 2+ or during play phase)
-        effects_active = self.current_day > 1 or self.phase == GamePhase.PLAY
-
-        # Collect events to process (with their effects) before removing cards
-        events_to_process: list[tuple[int, Card, str]] = []  # (index, card, effect_type)
-
-        for i, card in enumerate(player.hand):
-            if not card.is_mandatory_event():
-                continue
-
-            if card.subtype == EventType.POPULATION_GROWTH:
-                events_to_process.append((i, card, "population_growth"))
-
-            elif card.subtype == EventType.EARTHQUAKE:
-                events_to_process.append((i, card, "earthquake"))
-
-            elif card.subtype == EventType.ERUPTION:
-                events_to_process.append((i, card, "eruption"))
-
-            elif card.subtype == EventType.HUNGER:
-                if effects_active:
-                    events_to_process.append((i, card, "hunger_effect"))
-                else:
-                    events_to_process.append((i, card, "hunger_discard"))
-
-            elif card.subtype == EventType.BARBARIANS:
-                if effects_active:
-                    events_to_process.append((i, card, "barbarians_effect"))
-                else:
-                    events_to_process.append((i, card, "barbarians_discard"))
-
-        # Remove all event cards in reverse order
-        for i, card, _ in reversed(events_to_process):
-            removed = player.hand.pop(i)
-            self.discard_pile.append(removed)
-
-        # Now apply effects (cards are already removed, so no index issues)
-        for _, card, effect_type in events_to_process:
-            if effect_type == "population_growth":
-                # Build a free city (always applies)
-                if self.city_supply > 0:
-                    player.tribe_state.cities += 1
-                    self.city_supply -= 1
-                    self.broadcast_personal_l(
-                        player,
-                        "ageofheroes-population-growth-you",
-                        "ageofheroes-population-growth",
-                    )
-                    self.play_sound("game_ageofheroes/build.ogg")
-
-            elif effect_type == "earthquake":
-                # Earthquake is targetable at other players in round 2+
-                # For now, just announce discard
-                user = self.get_user(player)
-                if user:
-                    card_name = get_card_name(card, user.locale)
-                    user.speak_l("ageofheroes-discard-card-you", card=card_name)
-                self._broadcast_discard(player, card)
-
-            elif effect_type == "eruption":
-                # Eruption is targetable at other players in round 2+
-                # For now, just announce discard
-                user = self.get_user(player)
-                if user:
-                    card_name = get_card_name(card, user.locale)
-                    user.speak_l("ageofheroes-discard-card-you", card=card_name)
-                self._broadcast_discard(player, card)
-
-            elif effect_type == "hunger_effect":
-                # ALL players lose 1 Grain (unless blocked by Fortune)
-                self._apply_hunger_effect(player)
-
-            elif effect_type == "hunger_discard":
-                # Round 1: just announce discard
-                user = self.get_user(player)
-                if user:
-                    card_name = get_card_name(card, user.locale)
-                    user.speak_l("ageofheroes-discard-card-you", card=card_name)
-                self._broadcast_discard(player, card)
-
-            elif effect_type == "barbarians_effect":
-                # Playing player loses 2 conventional resources (unless blocked)
-                self._apply_barbarians_effect(player)
-
-            elif effect_type == "barbarians_discard":
-                # Round 1: just announce discard
-                user = self.get_user(player)
-                if user:
-                    card_name = get_card_name(card, user.locale)
-                    user.speak_l("ageofheroes-discard-card-you", card=card_name)
-                self._broadcast_discard(player, card)
-
-        # Check for elimination
-        self._check_elimination(player)
-
-    def _player_has_card(self, player: AgeOfHeroesPlayer, event_type: str) -> bool:
-        """Check if player has a specific event card."""
-        for card in player.hand:
-            if card.card_type == CardType.EVENT and card.subtype == event_type:
-                return True
-        return False
-
-    def _discard_player_card(self, player: AgeOfHeroesPlayer, event_type: str) -> bool:
-        """Discard a specific event card from player's hand. Returns True if found."""
-        for i, card in enumerate(player.hand):
-            if card.card_type == CardType.EVENT and card.subtype == event_type:
-                removed = player.hand.pop(i)
-                self.discard_pile.append(removed)
-
-                # Announce the block
-                user = self.get_user(player)
-                if user:
-                    card_name = get_card_name(removed, user.locale)
-                    user.speak_l("ageofheroes-block-with-card-you", card=card_name)
-
-                for p in self.players:
-                    if p != player:
-                        other_user = self.get_user(p)
-                        if other_user:
-                            card_name = get_card_name(removed, other_user.locale)
-                            other_user.speak_l(
-                                "ageofheroes-block-with-card",
-                                player=player.name,
-                                card=card_name,
-                            )
-                return True
-        return False
-
-    def _apply_hunger_effect(self, source_player: AgeOfHeroesPlayer) -> None:
-        """Apply Hunger effect: ALL players lose 1 Grain card.
-
-        Can be blocked by Fortune card.
-        """
-        self.broadcast_l("ageofheroes-hunger-strikes")
-        self.play_sound("game_ageofheroes/disaster.ogg")
-
-        for player in self.get_active_players():
-            if not isinstance(player, AgeOfHeroesPlayer):
-                continue
-            if not player.tribe_state:
-                continue
-
-            # Check for Fortune block
-            if self._player_has_card(player, EventType.FORTUNE):
-                self._discard_player_card(player, EventType.FORTUNE)
-                continue
-
-            # Find and discard one Grain
-            for i, card in enumerate(player.hand):
-                if card.card_type == CardType.RESOURCE and card.subtype == ResourceType.GRAIN:
-                    removed = player.hand.pop(i)
-                    self.discard_pile.append(removed)
-
-                    user = self.get_user(player)
-                    if user:
-                        card_name = get_card_name(removed, user.locale)
-                        user.speak_l("ageofheroes-lose-card-hunger", card=card_name)
-                    break
-
-    def _apply_barbarians_effect(self, player: AgeOfHeroesPlayer) -> None:
-        """Apply Barbarians effect: player loses 2 conventional resource cards.
-
-        Can be blocked by Fortune or Olympics card.
-        """
-        if not player.tribe_state:
-            return
-
-        self.broadcast_personal_l(
-            player, "ageofheroes-barbarians-attack-you", "ageofheroes-barbarians-attack"
-        )
-        self.play_sound("game_ageofheroes/disaster.ogg")
-
-        # Check for Fortune block
-        if self._player_has_card(player, EventType.FORTUNE):
-            self._discard_player_card(player, EventType.FORTUNE)
-            return
-
-        # Check for Olympics block
-        if self._player_has_card(player, EventType.OLYMPICS):
-            self._discard_player_card(player, EventType.OLYMPICS)
-            return
-
-        # Lose up to 2 conventional resources
-        lost_count = 0
-        while lost_count < 2:
-            found = False
-            for i, card in enumerate(player.hand):
-                if card.card_type == CardType.RESOURCE and card.subtype != ResourceType.GOLD:
-                    removed = player.hand.pop(i)
-                    self.discard_pile.append(removed)
-                    lost_count += 1
-
-                    user = self.get_user(player)
-                    if user:
-                        card_name = get_card_name(removed, user.locale)
-                        user.speak_l("ageofheroes-lose-card-barbarians", card=card_name)
-                    found = True
-                    break
-            if not found:
-                break
-
-    def _check_drawn_card_event(
-        self, player: AgeOfHeroesPlayer, card: Card
-    ) -> None:
-        """Check if a drawn card triggers an immediate event.
-
-        Pascal behavior: Hunger and Barbarians trigger immediately when drawn
-        during Play phase or after round 1.
-        """
-        if card.card_type != CardType.EVENT:
-            return
-
-        # Only trigger during play phase or round 2+
-        if self.phase != GamePhase.PLAY and self.current_day <= 1:
-            return
-
-        if card.subtype == EventType.HUNGER:
-            self._apply_hunger_effect(player)
-            # Remove the drawn card
-            if card in player.hand:
-                player.hand.remove(card)
-                self.discard_pile.append(card)
-
-        elif card.subtype == EventType.BARBARIANS:
-            self._apply_barbarians_effect(player)
-            # Remove the drawn card
-            if card in player.hand:
-                player.hand.remove(card)
-                self.discard_pile.append(card)
 
     def _broadcast_discard(self, player: AgeOfHeroesPlayer, card: Card) -> None:
         """Broadcast card discard to other players."""
@@ -2214,7 +1952,7 @@ class AgeOfHeroesGame(Game):
             return
 
         # Build the selected building using shared logic
-        success = self._execute_single_build(player, building_type, auto_road=False)
+        success = execute_single_build(self, player, building_type, auto_road=False)
 
         if not success:
             # Build failed or victory occurred
@@ -2369,7 +2107,7 @@ class AgeOfHeroesGame(Game):
             available = get_affordable_buildings(self, builder)
             if available:
                 # Continue building
-                self._bot_perform_construction(builder)
+                bot_ai.bot_perform_construction(self, builder)
             else:
                 # No more resources to build
                 self._end_action(builder)
@@ -2431,7 +2169,7 @@ class AgeOfHeroesGame(Game):
             available = get_affordable_buildings(self, builder)
             if available:
                 # Continue building
-                self._bot_perform_construction(builder)
+                bot_ai.bot_perform_construction(self, builder)
             else:
                 # No more resources to build
                 self._end_action(builder)
@@ -2702,7 +2440,7 @@ class AgeOfHeroesGame(Game):
                     prepare_forces(self, defender, def_armies, def_generals, def_heroes, def_hero_generals)
 
                     # Proceed to battle
-                    self._execute_war_battle()
+                    execute_war_battle(self)
                 else:
                     # Human defender needs to select forces
                     # Initialize defender's force selection with defaults
@@ -2748,7 +2486,7 @@ class AgeOfHeroesGame(Game):
             player.pending_war_heroes_as_generals = 0
 
             # Proceed to battle
-            self._execute_war_battle()
+            execute_war_battle(self)
 
     def _action_cancel_war_forces(self, player: Player, action_id: str) -> None:
         """Cancel force selection."""
@@ -2869,10 +2607,10 @@ class AgeOfHeroesGame(Game):
         )
 
         if offer:
-            self._announce_offer(player, card, wanted_subtype)
+            announce_offer(self, player, card, wanted_subtype)
 
             # Check for matching trades immediately
-            self._check_and_execute_trades()
+            check_and_execute_trades(self)
 
         # Clear the pending offer
         player.pending_offer_card_index = -1
@@ -2931,254 +2669,6 @@ class AgeOfHeroesGame(Game):
             # Done discarding, end turn
             self._end_turn()
 
-    def _bot_do_trading(self, player: AgeOfHeroesPlayer) -> None:
-        """Bot performs trading actions during fair phase."""
-        if player.has_stopped_trading:
-            return
-
-        # First, make offers if we haven't yet
-        if not player.has_made_offers:
-            self._bot_make_trade_offers(player)
-            player.has_made_offers = True
-            return
-
-        # Check for matching trades and execute them
-        trades_made = self._check_and_execute_trades()
-
-        # If a trade was made, reset the wait timer
-        if trades_made:
-            player.trading_ticks_waited = 0
-            return
-
-        # Increment wait time
-        player.trading_ticks_waited += 1
-
-        # Stop trading after timeout
-        if player.trading_ticks_waited >= TRADING_TIMEOUT_TICKS:
-            self._action_stop_trading(player, "stop_trading")
-
-    def _bot_make_trade_offers(self, player: AgeOfHeroesPlayer) -> None:
-        """Bot makes trade offers for cards they want."""
-        if not player.tribe_state:
-            return
-
-        # What do we want? Our special resource for monument
-        wanted_special = TRIBE_SPECIAL_RESOURCE.get(player.tribe_state.tribe)
-
-        # Look through our hand for cards to offer
-        for i, card in enumerate(player.hand):
-            # Don't offer our own special resource
-            if card.card_type == CardType.SPECIAL:
-                if card.subtype == wanted_special:
-                    continue  # Keep this, we need it!
-
-            # Offer other special resources (we can't use them)
-            if card.card_type == CardType.SPECIAL:
-                # Offer this for our special resource
-                offer = create_offer(
-                    self, player, i,
-                    wanted_type=CardType.SPECIAL,
-                    wanted_subtype=wanted_special,
-                )
-                if offer:
-                    self._announce_offer(player, card, wanted_special)
-
-            # Offer disaster cards for anything useful
-            if card.is_disaster():
-                # Offer for our special resource
-                offer = create_offer(
-                    self, player, i,
-                    wanted_type=CardType.SPECIAL,
-                    wanted_subtype=wanted_special,
-                )
-                if offer:
-                    self._announce_offer(player, card, wanted_special)
-
-    def _announce_offer(
-        self, player: AgeOfHeroesPlayer, offered_card: Card, wanted_subtype: str | None
-    ) -> None:
-        """Announce a trade offer."""
-        for p in self.players:
-            user = self.get_user(p)
-            if user:
-                offered_name = get_card_name(offered_card, user.locale)
-
-                # Get wanted name based on type
-                if wanted_subtype is None:
-                    wanted_name = Localization.get(user.locale, "ageofheroes-any-card")
-                elif wanted_subtype in [r for r in ResourceType]:
-                    wanted_card = Card(id=-1, card_type=CardType.RESOURCE, subtype=wanted_subtype)
-                    wanted_name = get_card_name(wanted_card, user.locale)
-                elif wanted_subtype in [s for s in SpecialResourceType]:
-                    wanted_card = Card(id=-1, card_type=CardType.SPECIAL, subtype=wanted_subtype)
-                    wanted_name = get_card_name(wanted_card, user.locale)
-                elif wanted_subtype in [e for e in EventType]:
-                    wanted_card = Card(id=-1, card_type=CardType.EVENT, subtype=wanted_subtype)
-                    wanted_name = get_card_name(wanted_card, user.locale)
-                else:
-                    wanted_name = wanted_subtype
-
-                if p == player:
-                    user.speak_l(
-                        "ageofheroes-offer-made-you",
-                        card=offered_name,
-                        wanted=wanted_name,
-                    )
-                else:
-                    user.speak_l(
-                        "ageofheroes-offer-made",
-                        player=player.name,
-                        card=offered_name,
-                        wanted=wanted_name,
-                    )
-
-    def _check_and_execute_trades(self) -> bool:
-        """Check for matching offers and execute trades. Returns True if any trade made."""
-        trades_made = False
-        active_players = self.get_active_players()
-
-        # Check all pairs of offers for matches
-        i = 0
-        while i < len(self.trade_offers):
-            offer1 = self.trade_offers[i]
-            if offer1.player_index >= len(active_players):
-                i += 1
-                continue
-
-            player1 = active_players[offer1.player_index]
-            if not isinstance(player1, AgeOfHeroesPlayer):
-                i += 1
-                continue
-
-            if offer1.card_index >= len(player1.hand):
-                i += 1
-                continue
-
-            card1 = player1.hand[offer1.card_index]
-
-            j = i + 1
-            while j < len(self.trade_offers):
-                offer2 = self.trade_offers[j]
-                if offer2.player_index >= len(active_players):
-                    j += 1
-                    continue
-                if offer2.player_index == offer1.player_index:
-                    j += 1
-                    continue
-
-                player2 = active_players[offer2.player_index]
-                if not isinstance(player2, AgeOfHeroesPlayer):
-                    j += 1
-                    continue
-
-                if offer2.card_index >= len(player2.hand):
-                    j += 1
-                    continue
-
-                card2 = player2.hand[offer2.card_index]
-
-                # Check if offers match
-                # offer1 wants what player2 offers, and offer2 wants what player1 offers
-                match1 = (
-                    (offer1.wanted_type is None or offer1.wanted_type == card2.card_type)
-                    and (offer1.wanted_subtype is None or offer1.wanted_subtype == card2.subtype)
-                )
-                match2 = (
-                    (offer2.wanted_type is None or offer2.wanted_type == card1.card_type)
-                    and (offer2.wanted_subtype is None or offer2.wanted_subtype == card1.subtype)
-                )
-
-                if match1 and match2:
-                    # Check special resource restrictions
-                    # Special resources can only go to the tribe that needs them
-                    valid = True
-                    if card1.card_type == CardType.SPECIAL:
-                        needed_by = None
-                        for tribe, special in TRIBE_SPECIAL_RESOURCE.items():
-                            if special == card1.subtype:
-                                needed_by = tribe
-                                break
-                        if needed_by and player2.tribe_state:
-                            if player2.tribe_state.tribe != needed_by:
-                                valid = False
-
-                    if card2.card_type == CardType.SPECIAL:
-                        needed_by = None
-                        for tribe, special in TRIBE_SPECIAL_RESOURCE.items():
-                            if special == card2.subtype:
-                                needed_by = tribe
-                                break
-                        if needed_by and player1.tribe_state:
-                            if player1.tribe_state.tribe != needed_by:
-                                valid = False
-
-                    if valid:
-                        # Execute the trade
-                        self._execute_matched_trade(player1, offer1, player2, offer2)
-                        trades_made = True
-                        # Restart search since indices changed
-                        i = 0
-                        break
-
-                j += 1
-            else:
-                i += 1
-                continue
-            break  # Restart outer loop after trade
-
-        return trades_made
-
-    def _execute_matched_trade(
-        self,
-        player1: AgeOfHeroesPlayer,
-        offer1: TradeOffer,
-        player2: AgeOfHeroesPlayer,
-        offer2: TradeOffer,
-    ) -> None:
-        """Execute a matched trade between two players."""
-        card1 = player1.hand[offer1.card_index]
-        card2 = player2.hand[offer2.card_index]
-
-        # Swap cards
-        player1.hand[offer1.card_index] = card2
-        player2.hand[offer2.card_index] = card1
-
-        # Remove offers
-        if offer1 in self.trade_offers:
-            self.trade_offers.remove(offer1)
-        if offer2 in self.trade_offers:
-            self.trade_offers.remove(offer2)
-
-        # Announce trade
-        self.play_sound("game_ageofheroes/trade.ogg")
-
-        for p in self.players:
-            user = self.get_user(p)
-            if user:
-                card1_name = get_card_name(card1, user.locale)
-                card2_name = get_card_name(card2, user.locale)
-
-                if p == player1:
-                    user.speak_l(
-                        "ageofheroes-trade-accepted-you",
-                        other=player2.name,
-                        receive=card2_name,
-                    )
-                elif p == player2:
-                    user.speak_l(
-                        "ageofheroes-trade-accepted-you",
-                        other=player1.name,
-                        receive=card1_name,
-                    )
-                else:
-                    user.speak_l(
-                        "ageofheroes-trade-accepted",
-                        player=player1.name,
-                        other=player2.name,
-                        give=card1_name,
-                        receive=card2_name,
-                    )
-
     def _start_play_phase(self) -> None:
         """Start the main play phase."""
         self.phase = GamePhase.PLAY
@@ -3231,7 +2721,7 @@ class AgeOfHeroesGame(Game):
                         other_user.speak_l("ageofheroes-draw-card", player=player.name)
 
             # Check for immediate event triggers (Hunger/Barbarians)
-            self._check_drawn_card_event(player, drawn)
+            events.check_drawn_card_event(self, player, drawn)
 
         # Move to action selection
         self.sub_phase = PlaySubPhase.SELECT_ACTION
@@ -3318,135 +2808,6 @@ class AgeOfHeroesGame(Game):
 
         self._end_action(player)
 
-    def _execute_single_build(
-        self, player: AgeOfHeroesPlayer, building_type: str, auto_road: bool = False
-    ) -> bool:
-        """Execute building a single item. Returns True if successful, False otherwise.
-
-        Args:
-            player: The player building
-            building_type: Type of building to construct
-            auto_road: If True, automatically build road to first target (for bots)
-
-        Returns:
-            True if building was successful, False if it failed or victory occurred
-        """
-        if not player.tribe_state:
-            return False
-
-        # Handle road building specially (needs neighbor selection/permission)
-        if building_type == BuildingType.ROAD:
-            targets = get_road_targets(self, player)
-            if not targets:
-                return False
-
-            if auto_road:
-                # Bot mode: Select first target and send permission request
-                target_index, direction = targets[0]
-                active_players = self.get_active_players()
-                builder_index = active_players.index(player)
-
-                # Store the road request
-                player.pending_road_targets = targets
-                self.road_request_from = builder_index
-                self.road_request_to = target_index
-
-                # Enter road permission subphase
-                self.sub_phase = PlaySubPhase.ROAD_PERMISSION
-                self.rebuild_all_menus()
-
-                # Notify target player
-                if target_index < len(active_players):
-                    target = active_players[target_index]
-                    target_user = self.get_user(target)
-                    if target_user:
-                        target_user.speak_l("ageofheroes-road-request-received", requester=player.name)
-
-                    # If target is also a bot, have them auto-respond
-                    if target.is_bot:
-                        BotHelper.jolt_bot(target, ticks=5)
-
-                # Road request sent, waiting for response
-                return True
-            else:
-                # Human mode: Return False to indicate road needs selection menu
-                # (caller should handle this)
-                return False
-
-        # Build the selected building
-        if not build(self, player, building_type):
-            return False
-
-        # Check for city victory
-        if building_type == BuildingType.CITY:
-            if player.tribe_state.cities >= self.options.victory_cities:
-                self._declare_victory(player, "cities")
-                return False  # Don't continue building after victory
-
-        return True
-
-    def _start_construction(self, player: AgeOfHeroesPlayer) -> None:
-        """Start construction action."""
-        if not player.tribe_state:
-            self._end_action(player)
-            return
-
-        affordable = get_affordable_buildings(self, player)
-        if not affordable:
-            user = self.get_user(player)
-            if user:
-                user.speak_l("ageofheroes-no-resources")
-            # Don't end action - return to action selection
-            return
-
-        # For bots, auto-select what to build
-        if player.is_bot:
-            self._bot_perform_construction(player)
-        else:
-            # Show construction menu for human players
-            self.sub_phase = PlaySubPhase.CONSTRUCTION
-            user = self.get_user(player)
-            if user:
-                user.speak_l("ageofheroes-construction-menu")
-            self.rebuild_all_menus()
-
-    def _bot_perform_construction(self, player: AgeOfHeroesPlayer) -> None:
-        """Bot performs construction - can build multiple things per turn."""
-        if not player.tribe_state:
-            self._end_action(player)
-            return
-
-        # Keep building as long as bot wants to and has resources
-        from .construction import get_affordable_buildings
-        while True:
-            # Check if bot can still afford to build anything
-            affordable = get_affordable_buildings(self, player)
-            if not affordable:
-                # No more buildings available
-                self._end_action(player)
-                return
-
-            # Use bot AI to select what to build
-            building_type = bot_ai.bot_select_construction(self, player)
-            if not building_type:
-                # Bot decided to stop building
-                self._end_action(player)
-                return
-
-            # Execute the build using shared logic
-            success = self._execute_single_build(player, building_type, auto_road=True)
-            if not success:
-                # Build failed or victory occurred - stop building
-                if player.tribe_state:  # Only end action if not victory (which already ended game)
-                    self._end_action(player)
-                return
-
-            # If we're waiting for road permission, exit loop and wait for response
-            if self.sub_phase == PlaySubPhase.ROAD_PERMISSION:
-                return
-
-            # Continue loop - bot might build more things
-
     def _start_war_declaration(self, player: AgeOfHeroesPlayer) -> None:
         """Start war declaration."""
         if not player.tribe_state:
@@ -3464,7 +2825,7 @@ class AgeOfHeroesGame(Game):
 
         # For bots, auto-select target and execute war
         if player.is_bot:
-            self._bot_perform_war(player)
+            bot_ai.bot_perform_war(self, player)
         else:
             # Show war menu for human players
             # Get valid targets
@@ -3485,190 +2846,6 @@ class AgeOfHeroesGame(Game):
             if user:
                 user.speak_l("ageofheroes-war-select-target")
             self.rebuild_all_menus()
-
-    def _execute_war_battle(self) -> None:
-        """Start the interactive war battle after both sides have prepared forces.
-
-        Players will now click to roll dice each round instead of automatic resolution.
-        """
-        # Announce battle start with army counts
-        active_players = self.get_active_players()
-        war = self.war_state
-
-        if war.attacker_index < len(active_players) and war.defender_index < len(active_players):
-            attacker = active_players[war.attacker_index]
-            defender = active_players[war.defender_index]
-
-            att_armies = war.get_attacker_total_armies()
-            def_armies = war.get_defender_total_armies()
-
-            # Announce battle start
-            self.broadcast_l(
-                "ageofheroes-battle-start",
-                attacker=attacker.name,
-                defender=defender.name,
-                att_armies=att_armies,
-                def_armies=def_armies,
-            )
-
-        # Check if battle is already over (one side has 0 armies)
-        from .combat import is_battle_over
-        if is_battle_over(self):
-            # Battle is already over without needing to roll
-            self._finish_war_battle()
-            return
-
-        # Enter interactive battle mode
-        self.sub_phase = PlaySubPhase.WAR_BATTLE
-        war.battle_in_progress = True
-        war.reset_round_rolls()
-
-        # Rebuild menus to show "Roll dice" button
-        self.rebuild_all_menus()
-
-        # Jolt both bots to act immediately (set think ticks to 0)
-        active_players = self.get_active_players()
-        if war.attacker_index < len(active_players):
-            attacker = active_players[war.attacker_index]
-            if attacker.is_bot:
-                attacker.bot_think_ticks = 0
-                attacker.bot_pending_action = None
-        if war.defender_index < len(active_players):
-            defender = active_players[war.defender_index]
-            if defender.is_bot:
-                defender.bot_think_ticks = 0
-                defender.bot_pending_action = None
-
-    def _jolt_war_bots(self) -> None:
-        """Jolt bot players to roll dice in war."""
-        active_players = self.get_active_players()
-        war = self.war_state
-
-        if war.attacker_index < len(active_players):
-            attacker = active_players[war.attacker_index]
-            if attacker.is_bot and war.attacker_roll == 0:
-                # Clear any pending action and set to roll immediately next tick
-                attacker.bot_pending_action = None
-                attacker.bot_think_ticks = 1  # Will call bot_think on next tick
-
-        if war.defender_index < len(active_players):
-            defender = active_players[war.defender_index]
-            if defender.is_bot and war.defender_roll == 0:
-                # Clear any pending action and set to roll immediately next tick
-                defender.bot_pending_action = None
-                defender.bot_think_ticks = 1  # Will call bot_think on next tick
-
-    def _finish_war_battle(self) -> None:
-        """Finish the war battle and apply outcome."""
-        active_players = self.get_active_players()
-        war = self.war_state
-
-        # Save attacker/defender info BEFORE applying outcome (which resets war state)
-        from .combat import get_battle_winner
-        winner = get_battle_winner(self)
-
-        attacker_name = None
-        defender_name = None
-        if war.attacker_index < len(active_players) and war.defender_index < len(active_players):
-            attacker = active_players[war.attacker_index]
-            defender = active_players[war.defender_index]
-            attacker_name = attacker.name
-            defender_name = defender.name
-
-        # Apply war outcome (this may reset war state)
-        apply_war_outcome(self)
-
-        # Announce battle end summary
-        if attacker_name and defender_name:
-            if winner == "attacker":
-                self.broadcast_l(
-                    "ageofheroes-battle-victory-attacker",
-                    attacker=attacker_name,
-                    defender=defender_name,
-                )
-            elif winner == "defender":
-                self.broadcast_l(
-                    "ageofheroes-battle-victory-defender",
-                    attacker=attacker_name,
-                    defender=defender_name,
-                )
-            else:
-                self.broadcast_l(
-                    "ageofheroes-battle-mutual-defeat",
-                    attacker=attacker_name,
-                    defender=defender_name,
-                )
-
-        # Check for elimination of both players
-        if war.attacker_index < len(active_players):
-            attacker = active_players[war.attacker_index]
-            if isinstance(attacker, AgeOfHeroesPlayer):
-                self._check_elimination(attacker)
-
-        if war.defender_index < len(active_players):
-            defender = active_players[war.defender_index]
-            if isinstance(defender, AgeOfHeroesPlayer):
-                self._check_elimination(defender)
-
-        # Reset war state and end action
-        attacker_idx = war.attacker_index
-        war.reset()
-
-        if attacker_idx < len(active_players):
-            attacker = active_players[attacker_idx]
-            if isinstance(attacker, AgeOfHeroesPlayer):
-                self._end_action(attacker)
-
-    def _bot_perform_war(self, player: AgeOfHeroesPlayer) -> None:
-        """Bot performs war declaration and combat."""
-        if not player.tribe_state:
-            self._end_action(player)
-            return
-
-        # Select target and goal using bot AI
-        result = bot_ai.bot_select_war_target(self, player)
-        if not result:
-            self._end_action(player)
-            return
-
-        target_index, goal = result
-
-        # Declare war
-        if not declare_war(self, player, target_index, goal):
-            self._end_action(player)
-            return
-
-        # Get defender
-        active_players = self.get_active_players()
-        defender = active_players[target_index]
-        if not isinstance(defender, AgeOfHeroesPlayer):
-            self.war_state.reset()
-            self._end_action(player)
-            return
-
-        # Prepare attacker forces using bot AI
-        att_armies, att_generals, att_heroes, att_hero_generals = bot_ai.bot_select_armies(
-            self, player, is_attacking=True
-        )
-        prepare_forces(self, player, att_armies, att_generals, att_heroes, att_hero_generals)
-
-        # Prepare defender forces (if bot) or auto-prepare
-        if defender.is_bot:
-            def_armies, def_generals, def_heroes, def_hero_generals = bot_ai.bot_select_armies(
-                self, defender, is_attacking=False
-            )
-            prepare_forces(self, defender, def_armies, def_generals, def_heroes, def_hero_generals)
-        else:
-            # Auto-prepare defender with all available forces
-            if defender.tribe_state:
-                def_armies = defender.tribe_state.get_available_armies()
-                def_generals = defender.tribe_state.get_available_generals()
-                prepare_forces(self, defender, def_armies, def_generals, 0, 0)
-
-        # Execute battle using shared logic
-        # Note: _execute_war_battle() enters interactive mode, battle will complete when both sides roll
-        # _finish_war_battle() will call _end_action() when battle is done
-        self._execute_war_battle()
 
     def _perform_do_nothing(self, player: AgeOfHeroesPlayer) -> None:
         """Perform do nothing action."""
@@ -3694,18 +2871,9 @@ class AgeOfHeroesGame(Game):
                 )
             # For bots, auto-discard
             if player.is_bot:
-                self._bot_discard_excess(player)
+                bot_ai.bot_execute_discard_excess(self, player)
             return
 
-        self._end_turn()
-
-    def _bot_discard_excess(self, player: AgeOfHeroesPlayer) -> None:
-        """Bot discards excess cards."""
-        while len(player.hand) > MAX_HAND_SIZE:
-            # Discard least valuable card (simple heuristic)
-            worst_index = 0
-            player.hand.pop(worst_index)
-        player.pending_discard = 0
         self._end_turn()
 
     def _end_turn(self) -> None:
@@ -3822,22 +2990,11 @@ class AgeOfHeroesGame(Game):
                 if player.id in self.setup_rolls:
                     continue  # Already rolled
 
-                # Count down thinking time
-                if player.bot_think_ticks > 0:
-                    player.bot_think_ticks -= 1
-                    continue
-
-                # Execute pending action
-                if player.bot_pending_action:
-                    action_id = player.bot_pending_action
-                    player.bot_pending_action = None
-                    self.execute_action(player, action_id)
-                    continue
-
-                # Ask for action
-                action_id = self.bot_think(player)
-                if action_id:
-                    player.bot_pending_action = action_id
+                BotHelper.process_bot_action(
+                    bot=player,
+                    think_fn=lambda p=player: self.bot_think(p),
+                    execute_fn=lambda action_id, p=player: self.execute_action(p, action_id),
+                )
 
         # During fair phase, bots trade and then stop
         elif self.phase == GamePhase.FAIR:
@@ -3854,26 +3011,18 @@ class AgeOfHeroesGame(Game):
                     player.bot_think_ticks -= 1
                     continue
 
-                self._bot_do_trading(player)
+                bot_ai.bot_do_trading(self, player)
         # During road permission request, target bot needs to respond
         elif self.phase == GamePhase.PLAY and self.sub_phase == PlaySubPhase.ROAD_PERMISSION:
             active_players = self.get_active_players()
             if self.road_request_to < len(active_players):
                 target = active_players[self.road_request_to]
                 if target.is_bot and not target.is_spectator:
-                    # Count down thinking time
-                    if target.bot_think_ticks > 0:
-                        target.bot_think_ticks -= 1
-                    # Execute pending action
-                    elif target.bot_pending_action:
-                        action_id = target.bot_pending_action
-                        target.bot_pending_action = None
-                        self.execute_action(target, action_id)
-                    # Ask for action
-                    else:
-                        action_id = self.bot_think(target)
-                        if action_id:
-                            target.bot_pending_action = action_id
+                    BotHelper.process_bot_action(
+                        bot=target,
+                        think_fn=lambda: self.bot_think(target),
+                        execute_fn=lambda action_id: self.execute_action(target, action_id),
+                    )
         # During war battle, both attacker and defender need to roll
         elif self.phase == GamePhase.PLAY and self.sub_phase == PlaySubPhase.WAR_BATTLE:
             active_players = self.get_active_players()
@@ -3883,37 +3032,21 @@ class AgeOfHeroesGame(Game):
             if war.attacker_index < len(active_players):
                 attacker = active_players[war.attacker_index]
                 if attacker.is_bot and not attacker.is_spectator and war.attacker_roll == 0:
-                    # Count down thinking time
-                    if attacker.bot_think_ticks > 0:
-                        attacker.bot_think_ticks -= 1
-                    # Execute pending action
-                    elif attacker.bot_pending_action:
-                        action_id = attacker.bot_pending_action
-                        attacker.bot_pending_action = None
-                        self.execute_action(attacker, action_id)
-                    # Ask for action
-                    else:
-                        action_id = self.bot_think(attacker)
-                        if action_id:
-                            attacker.bot_pending_action = action_id
+                    BotHelper.process_bot_action(
+                        bot=attacker,
+                        think_fn=lambda: self.bot_think(attacker),
+                        execute_fn=lambda action_id: self.execute_action(attacker, action_id),
+                    )
 
             # Process defender bot (if still active)
             if war.defender_index < len(active_players):
                 defender = active_players[war.defender_index]
                 if defender.is_bot and not defender.is_spectator and war.defender_roll == 0:
-                    # Count down thinking time
-                    if defender.bot_think_ticks > 0:
-                        defender.bot_think_ticks -= 1
-                    # Execute pending action
-                    elif defender.bot_pending_action:
-                        action_id = defender.bot_pending_action
-                        defender.bot_pending_action = None
-                        self.execute_action(defender, action_id)
-                    # Ask for action
-                    else:
-                        action_id = self.bot_think(defender)
-                        if action_id:
-                            defender.bot_pending_action = action_id
+                    BotHelper.process_bot_action(
+                        bot=defender,
+                        think_fn=lambda: self.bot_think(defender),
+                        execute_fn=lambda action_id: self.execute_action(defender, action_id),
+                    )
         else:
             # Normal turn-based bot handling
             BotHelper.on_tick(self)
@@ -3925,10 +3058,6 @@ class AgeOfHeroesGame(Game):
 
         # Delegate to bot AI module
         return bot_ai.bot_think(self, player)
-
-    def _bot_select_action(self, player: AgeOfHeroesPlayer) -> str:
-        """Bot selects a main action."""
-        return bot_ai.bot_select_action(self, player)
 
     # ==========================================================================
     # Game Result

@@ -12,14 +12,19 @@ from .state import (
     BuildingType,
     WarGoal,
     BUILDING_COSTS,
+    TRIBE_SPECIAL_RESOURCE,
 )
-from .construction import can_build, get_affordable_buildings, get_road_targets
+from .construction import can_build, get_affordable_buildings, get_road_targets, execute_single_build
 from .combat import (
     can_declare_war,
     get_valid_war_targets,
     get_valid_war_goals,
     check_olympics_defense,
+    declare_war,
+    prepare_forces,
+    execute_war_battle,
 )
+from .trading import create_offer, announce_offer, check_and_execute_trades
 
 if TYPE_CHECKING:
     from .game import AgeOfHeroesGame, AgeOfHeroesPlayer
@@ -519,3 +524,186 @@ def bot_select_card_to_discard(
             best_index = i
 
     return best_index
+
+
+# ==========================================================================
+# Bot Orchestration Functions
+# These functions orchestrate bot actions and call game methods.
+# ==========================================================================
+
+
+def bot_do_trading(game: AgeOfHeroesGame, player: AgeOfHeroesPlayer) -> None:
+    """Bot performs trading actions during fair phase."""
+    # Import here to get constants
+    from .game import TRADING_TIMEOUT_TICKS
+
+    if player.has_stopped_trading:
+        return
+
+    # First, make offers if we haven't yet
+    if not player.has_made_offers:
+        bot_make_trade_offers(game, player)
+        player.has_made_offers = True
+        return
+
+    # Check for matching trades and execute them
+    trades_made = check_and_execute_trades(game)
+
+    # If a trade was made, reset the wait timer
+    if trades_made:
+        player.trading_ticks_waited = 0
+        return
+
+    # Increment wait time
+    player.trading_ticks_waited += 1
+
+    # Stop trading after timeout
+    if player.trading_ticks_waited >= TRADING_TIMEOUT_TICKS:
+        game._action_stop_trading(player, "stop_trading")
+
+
+def bot_make_trade_offers(game: AgeOfHeroesGame, player: AgeOfHeroesPlayer) -> None:
+    """Bot makes trade offers for cards they want."""
+    if not player.tribe_state:
+        return
+
+    # What do we want? Our special resource for monument
+    wanted_special = TRIBE_SPECIAL_RESOURCE.get(player.tribe_state.tribe)
+
+    # Look through our hand for cards to offer
+    for i, card in enumerate(player.hand):
+        # Don't offer our own special resource
+        if card.card_type == CardType.SPECIAL:
+            if card.subtype == wanted_special:
+                continue  # Keep this, we need it!
+
+        # Offer other special resources (we can't use them)
+        if card.card_type == CardType.SPECIAL:
+            # Offer this for our special resource
+            offer = create_offer(
+                game, player, i,
+                wanted_type=CardType.SPECIAL,
+                wanted_subtype=wanted_special,
+            )
+            if offer:
+                announce_offer(game, player, card, wanted_special)
+
+        # Offer disaster cards for anything useful
+        if card.is_disaster():
+            # Offer for our special resource
+            offer = create_offer(
+                game, player, i,
+                wanted_type=CardType.SPECIAL,
+                wanted_subtype=wanted_special,
+            )
+            if offer:
+                announce_offer(game, player, card, wanted_special)
+
+
+def bot_perform_construction(game: AgeOfHeroesGame, player: AgeOfHeroesPlayer) -> None:
+    """Bot performs construction - can build multiple things per turn."""
+    if not player.tribe_state:
+        game._end_action(player)
+        return
+
+    # Keep building as long as bot wants to and has resources
+    while True:
+        # Check if bot can still afford to build anything
+        affordable = get_affordable_buildings(game, player)
+        if not affordable:
+            # No more buildings available
+            game._end_action(player)
+            return
+
+        # Use bot AI to select what to build
+        building_type = bot_select_construction(game, player)
+        if not building_type:
+            # Bot decided to stop building
+            game._end_action(player)
+            return
+
+        # Execute the build using shared logic
+        success = execute_single_build(game, player, building_type, auto_road=True)
+        if not success:
+            # Build failed or victory occurred - stop building
+            if player.tribe_state:  # Only end action if not victory (which already ended game)
+                game._end_action(player)
+            return
+
+        # If we're waiting for road permission, exit loop and wait for response
+        if game.sub_phase == PlaySubPhase.ROAD_PERMISSION:
+            return
+
+        # Continue loop - bot might build more things
+
+
+def bot_perform_war(game: AgeOfHeroesGame, player: AgeOfHeroesPlayer) -> None:
+    """Bot performs war declaration and combat."""
+    # Import here to avoid circular import at module level
+    from .game import AgeOfHeroesPlayer as AOHPlayer
+
+    if not player.tribe_state:
+        game._end_action(player)
+        return
+
+    # Select target and goal using bot AI
+    result = bot_select_war_target(game, player)
+    if not result:
+        game._end_action(player)
+        return
+
+    target_index, goal = result
+
+    # Declare war
+    if not declare_war(game, player, target_index, goal):
+        game._end_action(player)
+        return
+
+    # Get defender
+    active_players = game.get_active_players()
+    defender = active_players[target_index]
+    if not isinstance(defender, AOHPlayer):
+        game.war_state.reset()
+        game._end_action(player)
+        return
+
+    # Prepare attacker forces using bot AI
+    att_armies, att_generals, att_heroes, att_hero_generals = bot_select_armies(
+        game, player, is_attacking=True
+    )
+    prepare_forces(game, player, att_armies, att_generals, att_heroes, att_hero_generals)
+
+    # Prepare defender forces (if bot) or auto-prepare
+    if defender.is_bot:
+        def_armies, def_generals, def_heroes, def_hero_generals = bot_select_armies(
+            game, defender, is_attacking=False
+        )
+        prepare_forces(game, defender, def_armies, def_generals, def_heroes, def_hero_generals)
+    else:
+        # Auto-prepare defender with all available forces
+        if defender.tribe_state:
+            def_armies = defender.tribe_state.get_available_armies()
+            def_generals = defender.tribe_state.get_available_generals()
+            prepare_forces(game, defender, def_armies, def_generals, 0, 0)
+
+    # Execute battle using shared logic
+    # Note: execute_war_battle() enters interactive mode, battle will complete when both sides roll
+    # finish_war_battle() will call _end_action() when battle is done
+    execute_war_battle(game)
+
+
+def bot_execute_discard_excess(game: AgeOfHeroesGame, player: AgeOfHeroesPlayer) -> None:
+    """Bot executes discarding excess cards (orchestration function)."""
+    from .game import MAX_HAND_SIZE
+
+    while len(player.hand) > MAX_HAND_SIZE:
+        # Discard least valuable card (simple heuristic)
+        worst_index = 0
+        player.hand.pop(worst_index)
+    player.pending_discard = 0
+    game._end_turn()
+
+
+def bot_do_select_action(game: AgeOfHeroesGame, player: AgeOfHeroesPlayer) -> str:
+    """Bot selects a main action. Wrapper for bot_select_action."""
+    return bot_select_action(game, player)
