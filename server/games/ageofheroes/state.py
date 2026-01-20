@@ -37,6 +37,7 @@ class PlaySubPhase(str, Enum):
     TAX_COLLECTION = "tax_collection"  # Performing tax collection
     CONSTRUCTION = "construction"  # Building things
     ROAD_TARGET = "road_target"  # Selecting which neighbor to build road to
+    ROAD_PERMISSION = "road_permission"  # Neighbor approving/denying road request
     WAR_DECLARE = "war_declare"  # Selecting war target and goal
     WAR_PREPARE_ATTACKER = "war_prepare_attacker"  # Attacker selecting forces
     WAR_PREPARE_DEFENDER = "war_prepare_defender"  # Defender selecting forces

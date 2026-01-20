@@ -311,6 +311,28 @@ class AgeOfHeroesGame(Game):
             )
         )
 
+        # Road permission actions (approve/deny)
+        action_set.add(
+            Action(
+                id="approve_road",
+                label="Approve",
+                handler="_action_approve_road",
+                is_enabled="_is_road_permission_enabled",
+                is_hidden="_is_road_permission_hidden",
+                get_label="_get_approve_road_label",
+            )
+        )
+        action_set.add(
+            Action(
+                id="deny_road",
+                label="Deny",
+                handler="_action_deny_road",
+                is_enabled="_is_road_permission_enabled",
+                is_hidden="_is_road_permission_hidden",
+                get_label="_get_deny_road_label",
+            )
+        )
+
         # War target selection actions (one per potential enemy)
         for i in range(6):  # Max 6 players
             action_set.add(
@@ -853,6 +875,58 @@ class AgeOfHeroesGame(Game):
         user = self.get_user(player)
         locale = user.locale if user else "en"
         return Localization.get(locale, "ageofheroes-cancel")
+
+    def _is_road_permission_enabled(self, player: Player) -> str | None:
+        """Road permission actions enabled during permission phase."""
+        if self.status != "playing":
+            return "ageofheroes-game-not-started"
+        if self.phase != GamePhase.PLAY:
+            return "ageofheroes-wrong-phase"
+        if self.sub_phase != PlaySubPhase.ROAD_PERMISSION:
+            return "ageofheroes-wrong-phase"
+
+        # Only the target player can approve/deny
+        active_players = self.get_active_players()
+        try:
+            player_index = active_players.index(player)
+        except ValueError:
+            return "ageofheroes-not-your-turn"
+
+        if player_index != self.road_request_to:
+            return "ageofheroes-not-your-turn"
+
+        return None
+
+    def _is_road_permission_hidden(self, player: Player) -> Visibility:
+        """Road permission actions visible during permission phase."""
+        if self.phase != GamePhase.PLAY:
+            return Visibility.HIDDEN
+        if self.sub_phase != PlaySubPhase.ROAD_PERMISSION:
+            return Visibility.HIDDEN
+
+        # Show to target player only
+        active_players = self.get_active_players()
+        try:
+            player_index = active_players.index(player)
+        except ValueError:
+            return Visibility.HIDDEN
+
+        if player_index != self.road_request_to:
+            return Visibility.HIDDEN
+
+        return Visibility.VISIBLE
+
+    def _get_approve_road_label(self, player: Player, action_id: str) -> str:
+        """Get label for approve road action."""
+        user = self.get_user(player)
+        locale = user.locale if user else "en"
+        return Localization.get(locale, "ageofheroes-approve")
+
+    def _get_deny_road_label(self, player: Player, action_id: str) -> str:
+        """Get label for deny road action."""
+        user = self.get_user(player)
+        locale = user.locale if user else "en"
+        return Localization.get(locale, "ageofheroes-deny")
 
     def _is_war_declare_menu_enabled(self, player: Player) -> str | None:
         """War declare menu actions enabled during war declaration phase."""
@@ -1994,22 +2068,15 @@ class AgeOfHeroesGame(Game):
                 self.rebuild_all_menus()
                 return
 
-            # If only one target, build directly
+            # If only one target, build directly (but need permission first)
             if len(targets) == 1:
-                target_index, direction = targets[0]
-
-                # Spend resources first
-                from .construction import spend_resources
-                spend_resources(player, BUILDING_COSTS[BuildingType.ROAD], self.discard_pile)
-                self.road_supply -= 1
-
-                # Build the road
-                build_road(self, player, target_index, direction)
-
-                # Return to action selection
-                self.sub_phase = PlaySubPhase.SELECT_ACTION
+                # Still need to ask permission, so go to selection menu
+                player.pending_road_targets = targets
+                self.sub_phase = PlaySubPhase.ROAD_TARGET
+                user = self.get_user(player)
+                if user:
+                    user.speak_l("ageofheroes-road-select-neighbor")
                 self.rebuild_all_menus()
-                self._end_action(player)
                 return
 
             # Multiple targets - show selection menu
@@ -2029,10 +2096,21 @@ class AgeOfHeroesGame(Game):
                     self._declare_victory(player, "cities")
                     return
 
-        # Return to action selection
-        self.sub_phase = PlaySubPhase.SELECT_ACTION
-        self.rebuild_all_menus()
-        self._end_action(player)
+        # Check if player can still build more things
+        from .construction import get_available_buildings
+        available = get_available_buildings(self, player)
+
+        if available:
+            # Stay in construction mode - player can build more
+            self.rebuild_all_menus()
+            user = self.get_user(player)
+            if user:
+                user.speak_l("ageofheroes-construction-menu")
+        else:
+            # No more buildings available - end action
+            self.sub_phase = PlaySubPhase.SELECT_ACTION
+            self.rebuild_all_menus()
+            self._end_action(player)
 
     def _action_stop_building(self, player: Player, action_id: str) -> None:
         """Handle canceling construction."""
@@ -2046,12 +2124,13 @@ class AgeOfHeroesGame(Game):
         if user:
             user.speak_l("ageofheroes-construction-stopped")
 
-        # Return to action selection
+        # Return to action selection and end turn
         self.sub_phase = PlaySubPhase.SELECT_ACTION
         self.rebuild_all_menus()
+        self._end_action(player)
 
     def _action_select_road_target(self, player: Player, action_id: str) -> None:
-        """Handle road target selection."""
+        """Handle road target selection - requests permission from neighbor."""
         if not isinstance(player, AgeOfHeroesPlayer):
             return
 
@@ -2069,21 +2148,27 @@ class AgeOfHeroesGame(Game):
 
         target_index, direction = player.pending_road_targets[target_index_in_list]
 
-        # Spend resources first
-        from .construction import spend_resources
-        spend_resources(player, BUILDING_COSTS[BuildingType.ROAD], self.discard_pile)
-        self.road_supply -= 1
+        # Store the road request (builder and target)
+        active_players = self.get_active_players()
+        builder_index = active_players.index(player)
+        self.road_request_from = builder_index
+        self.road_request_to = target_index
 
-        # Build the road
-        build_road(self, player, target_index, direction)
+        # Enter permission phase
+        self.sub_phase = PlaySubPhase.ROAD_PERMISSION
 
-        # Clear pending targets
-        player.pending_road_targets = []
+        # Notify players
+        user = self.get_user(player)
+        if user:
+            user.speak_l("ageofheroes-road-request-sent")
 
-        # Return to action selection
-        self.sub_phase = PlaySubPhase.SELECT_ACTION
+        if target_index < len(active_players):
+            target_player = active_players[target_index]
+            target_user = self.get_user(target_player)
+            if target_user:
+                target_user.speak_l("ageofheroes-road-request-received", requester=player.name)
+
         self.rebuild_all_menus()
-        self._end_action(player)
 
     def _action_cancel_road(self, player: Player, action_id: str) -> None:
         """Handle canceling road target selection."""
@@ -2101,6 +2186,105 @@ class AgeOfHeroesGame(Game):
         user = self.get_user(player)
         if user:
             user.speak_l("ageofheroes-construction-menu")
+        self.rebuild_all_menus()
+
+    def _action_approve_road(self, player: Player, action_id: str) -> None:
+        """Handle approving road request."""
+        if not isinstance(player, AgeOfHeroesPlayer):
+            return
+
+        if self.sub_phase != PlaySubPhase.ROAD_PERMISSION:
+            return
+
+        active_players = self.get_active_players()
+
+        # Verify this player is the target
+        player_index = active_players.index(player)
+        if player_index != self.road_request_to:
+            return
+
+        # Get builder
+        if self.road_request_from < 0 or self.road_request_from >= len(active_players):
+            return
+        builder = active_players[self.road_request_from]
+        if not isinstance(builder, AgeOfHeroesPlayer) or not builder.tribe_state:
+            return
+
+        # Determine direction
+        direction = None
+        for target_index, target_direction in builder.pending_road_targets:
+            if target_index == player_index:
+                direction = target_direction
+                break
+
+        if not direction:
+            return
+
+        # Spend resources and build road
+        from .construction import spend_resources, build_road, get_available_buildings
+        spend_resources(builder, BUILDING_COSTS[BuildingType.ROAD], self.discard_pile)
+        self.road_supply -= 1
+        build_road(self, builder, player_index, direction)
+
+        # Clear pending targets and request
+        builder.pending_road_targets = []
+        self.road_request_from = -1
+        self.road_request_to = -1
+
+        # Check if builder can still build more things
+        available = get_available_buildings(self, builder)
+
+        if available:
+            # Stay in construction mode - builder can build more
+            self.sub_phase = PlaySubPhase.CONSTRUCTION
+            self.rebuild_all_menus()
+            builder_user = self.get_user(builder)
+            if builder_user:
+                builder_user.speak_l("ageofheroes-construction-menu")
+        else:
+            # No more buildings available - end action
+            self.sub_phase = PlaySubPhase.SELECT_ACTION
+            self.rebuild_all_menus()
+            self._end_action(builder)
+
+    def _action_deny_road(self, player: Player, action_id: str) -> None:
+        """Handle denying road request."""
+        if not isinstance(player, AgeOfHeroesPlayer):
+            return
+
+        if self.sub_phase != PlaySubPhase.ROAD_PERMISSION:
+            return
+
+        active_players = self.get_active_players()
+
+        # Verify this player is the target
+        player_index = active_players.index(player)
+        if player_index != self.road_request_to:
+            return
+
+        # Get builder
+        if self.road_request_from < 0 or self.road_request_from >= len(active_players):
+            return
+        builder = active_players[self.road_request_from]
+
+        # Notify
+        user = self.get_user(player)
+        if user:
+            user.speak_l("ageofheroes-road-request-denied-you")
+        builder_user = self.get_user(builder)
+        if builder_user:
+            builder_user.speak_l("ageofheroes-road-request-denied", denier=player.name)
+
+        # Clear pending targets and request
+        if isinstance(builder, AgeOfHeroesPlayer):
+            builder.pending_road_targets = []
+        self.road_request_from = -1
+        self.road_request_to = -1
+
+        # Return builder to construction menu
+        self.sub_phase = PlaySubPhase.CONSTRUCTION
+        if builder_user:
+            builder_user.speak_l("ageofheroes-construction-menu")
         self.rebuild_all_menus()
 
     def _action_select_war_target(self, player: Player, action_id: str) -> None:

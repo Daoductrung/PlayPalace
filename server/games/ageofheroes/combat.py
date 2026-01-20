@@ -500,11 +500,13 @@ def apply_war_outcome(game: AgeOfHeroesGame) -> None:
 
     elif war.goal == WarGoal.DESTRUCTION:
         # Destroy monument progress based on army strength (Pascal: wgsDestruction)
-        # 3+ armies: 2 resources, 1-2 armies: 1 resource
+        # 3+ armies: 2 resources, 1-2 armies: 1 resource, 0 armies: 0 resources
         if attacker_strength >= 3:
             resources_to_destroy = 2
-        else:
+        elif attacker_strength >= 1:
             resources_to_destroy = 1
+        else:
+            resources_to_destroy = 0
 
         resources_to_destroy = min(
             resources_to_destroy, defender.tribe_state.monument_progress
@@ -523,6 +525,38 @@ def apply_war_outcome(game: AgeOfHeroesGame) -> None:
     return_surviving_forces(game)
 
 
+def has_road_connection(
+    game: AgeOfHeroesGame, player1_index: int, player2_index: int
+) -> bool:
+    """Check if two players have a road connection between them."""
+    active_players = game.get_active_players()
+
+    if player1_index >= len(active_players) or player2_index >= len(active_players):
+        return False
+
+    player1 = active_players[player1_index]
+    player2 = active_players[player2_index]
+
+    if not hasattr(player1, "tribe_state") or not player1.tribe_state:
+        return False
+    if not hasattr(player2, "tribe_state") or not player2.tribe_state:
+        return False
+
+    # Check if they are neighbors and have connecting roads
+    # Players are neighbors if their indices differ by 1 (mod num_players)
+    num_players = len(active_players)
+
+    # Check if player2 is to the right of player1
+    if (player1_index + 1) % num_players == player2_index:
+        return player1.tribe_state.road_right and player2.tribe_state.road_left
+
+    # Check if player2 is to the left of player1
+    if (player1_index - 1) % num_players == player2_index:
+        return player1.tribe_state.road_left and player2.tribe_state.road_right
+
+    return False
+
+
 def return_surviving_forces(game: AgeOfHeroesGame) -> None:
     """Return surviving armies after battle."""
     war = game.war_state
@@ -536,20 +570,37 @@ def return_surviving_forces(game: AgeOfHeroesGame) -> None:
             surviving_generals = war.attacker_generals
 
             if surviving_armies > 0 or surviving_generals > 0:
-                # Check if attacker has road to return immediately
-                # For simplicity, always delay return
-                attacker.tribe_state.returning_armies = surviving_armies
-                attacker.tribe_state.returning_generals = surviving_generals
+                # Check if attacker has road to defender for immediate return
+                has_road = has_road_connection(game, war.attacker_index, war.defender_index)
 
-                user = game.get_user(attacker)
-                if user:
-                    user.speak_l(
-                        "ageofheroes-army-return-delayed",
-                        count=surviving_armies + surviving_generals,
-                    )
+                if has_road:
+                    # Immediate return via road
+                    attacker.tribe_state.armies += surviving_armies
+                    attacker.tribe_state.generals += surviving_generals
 
-    # Defender's armies stay (they're defending their home)
-    # No return needed
+                    user = game.get_user(attacker)
+                    if user:
+                        user.speak_l("ageofheroes-army-return-road")
+                    game.play_sound("game_ageofheroes/backarmy.ogg")
+                else:
+                    # Delayed return - armies come back next turn
+                    attacker.tribe_state.returning_armies = surviving_armies
+                    attacker.tribe_state.returning_generals = surviving_generals
+
+                    user = game.get_user(attacker)
+                    if user:
+                        user.speak_l(
+                            "ageofheroes-army-return-delayed",
+                            count=surviving_armies + surviving_generals,
+                        )
+
+    # Defender's armies always return immediately (defending at home)
+    if war.defender_index < len(active_players):
+        defender = active_players[war.defender_index]
+        if hasattr(defender, "tribe_state") and defender.tribe_state:
+            # Defender's armies return to their tribe
+            defender.tribe_state.armies += war.defender_armies
+            defender.tribe_state.generals += war.defender_generals
 
     # Reset war state
     war.reset()

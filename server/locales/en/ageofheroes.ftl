@@ -169,11 +169,14 @@ ageofheroes-construction-stopped = You decided to stop building.
 ageofheroes-road-select-neighbor = Select which neighbor to build a road to.
 ageofheroes-direction-left = To your left
 ageofheroes-direction-right = To your right
-ageofheroes-road-request = { $player } requests permission to build a road to your tribe. Accept?
-ageofheroes-road-accepted = { $player } agreed to build a road with you.
-ageofheroes-road-rejected = { $player } declined your road request.
+ageofheroes-road-request-sent = Road request sent. Waiting for neighbor's approval.
+ageofheroes-road-request-received = { $requester } requests permission to build a road to your tribe.
+ageofheroes-road-request-denied-you = You declined the road request.
+ageofheroes-road-request-denied = { $denier } declined your road request.
 ageofheroes-road-built = { $tribe1 } and { $tribe2 } are now connected by road.
 ageofheroes-road-no-target = No neighboring tribes available for road construction.
+ageofheroes-approve = Approve
+ageofheroes-deny = Deny
 ageofheroes-supply-exhausted = No more { $building } available to build.
 
 # Do Nothing
