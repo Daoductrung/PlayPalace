@@ -397,6 +397,7 @@ class HoldemGame(Game):
         self.define_keybind("c", "Call/Check", ["call"])
         self.define_keybind("r", "Raise", ["raise"])
         self.define_keybind("A", "All in", ["all_in"])
+        self.define_keybind("a", "All in", ["all_in"])
         self.define_keybind("d", "Read hand", ["speak_hand"], include_spectators=False)
         self.define_keybind("e", "Read table", ["speak_table"], include_spectators=True)
         self.define_keybind("g", "Hand value", ["speak_hand_value"], include_spectators=False)
@@ -796,7 +797,21 @@ class HoldemGame(Game):
         self._after_action()
 
     def _bot_input_raise(self, player: Player) -> str:
-        return "1"
+        if not self.betting:
+            return "1"
+        to_call = self.betting.amount_to_call(player.id)
+        min_raise = max(self.betting.last_raise_size, 1)
+        amount = min_raise
+        if self.options.raise_mode != "no_limit":
+            pot_total = self.pot_manager.total_pot()
+            cap = pot_total + to_call * 2
+            if self.options.raise_mode == "double_pot":
+                cap = pot_total * 2 + to_call * 2
+            total = min(to_call + amount, cap)
+            amount = max(min_raise, total - to_call)
+        max_affordable = max(1, player.chips - to_call)
+        amount = min(amount, max_affordable)
+        return str(max(1, amount))
 
     def _action_all_in(self, player: Player, action_id: str) -> None:
         p = self._require_active_player(player)
@@ -961,8 +976,9 @@ class HoldemGame(Game):
             user.speak_l("poker-pot-total", amount=0)
             return
         user.speak_l("poker-pot-total", amount=self.pot_manager.total_pot())
-        if pots:
-            user.speak_l("poker-pot-main", amount=pots[0].amount)
+        if not self._all_in_ids():
+            return
+        user.speak_l("poker-pot-main", amount=pots[0].amount)
         for idx, pot in enumerate(pots[1:], start=1):
             user.speak_l("poker-pot-side", index=idx, amount=pot.amount)
 
@@ -997,12 +1013,12 @@ class HoldemGame(Game):
             return
         user = self.get_user(player)
         if user:
-            user.speak_l("poker-your-hand", cards=read_cards(p.hand, user.locale))
+            user.speak(read_cards(p.hand, user.locale))
 
     def _action_read_table(self, player: Player, action_id: str) -> None:
         user = self.get_user(player)
         if user:
-            user.speak_l("poker-table-cards", cards=read_cards(self.community, user.locale))
+            user.speak(read_cards(self.community, user.locale))
 
     def _action_read_hand_value(self, player: Player, action_id: str) -> None:
         p = player if isinstance(player, HoldemPlayer) else None
@@ -1072,7 +1088,9 @@ class HoldemGame(Game):
             user.speak_l("poker-blind-timer-disabled")
             return
         remaining = (self.blind_timer_ticks + 19) // 20
-        user.speak_l("poker-blind-timer-remaining", seconds=remaining)
+        minutes = remaining // 60
+        seconds = remaining % 60
+        user.speak_l("poker-blind-timer-remaining-ms", minutes=minutes, seconds=seconds)
 
     def _action_reveal_both(self, player: Player, action_id: str) -> None:
         if self.phase != "showdown":

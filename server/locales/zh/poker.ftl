@@ -48,6 +48,7 @@ poker-timer-disabled = Turn timer is disabled.
 poker-timer-remaining = { $seconds } seconds remaining.
 poker-blind-timer-disabled = Blind timer is disabled.
 poker-blind-timer-remaining = { $seconds } seconds until blinds increase.
+poker-blind-timer-remaining-ms = { $minutes } minutes { $seconds } seconds until blinds increase.
 poker-blinds-raise-next-hand = Blinds will raise next hand.
 
 poker-button-is = Button is with { $player }.
