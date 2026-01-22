@@ -19,6 +19,7 @@ from ...game_utils.poker_evaluator import best_hand, describe_hand, describe_par
 from ...game_utils.poker_actions import compute_pot_limit_caps, clamp_total_to_cap
 from ...game_utils import poker_log
 from ...game_utils.poker_state import order_after_button
+from ...game_utils.poker_showdown import order_winners_by_button
 from ...messages.localization import Localization
 from ...ui.keybinds import KeybindState
 from .bot import bot_think
@@ -780,8 +781,7 @@ class FiveCardDrawGame(Game):
         if len(winners) <= 1:
             return winners
         active_ids = [p.id for p in self.get_active_players()]
-        order = order_after_button(active_ids, self.table_state.get_button_id(active_ids))
-        return sorted(winners, key=lambda p: order.index(p.id) if p.id in order else len(order))
+        return order_winners_by_button(winners, active_ids, self.table_state.get_button_id(active_ids), lambda p: p.id)
 
     # ==========================================================================
     # Utility / status actions

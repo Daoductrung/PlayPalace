@@ -17,6 +17,7 @@ from ...game_utils.poker_table import PokerTableState
 from ...game_utils.poker_timer import PokerTurnTimer
 from ...game_utils.poker_evaluator import best_hand, describe_hand, describe_partial_hand
 from ...game_utils.poker_actions import compute_pot_limit_caps, clamp_total_to_cap
+from ...game_utils.poker_showdown import order_winners_by_button, sort_players_for_showdown
 from ...game_utils import poker_log
 from ...messages.localization import Localization
 from ...ui.keybinds import KeybindState
@@ -933,12 +934,12 @@ class HoldemGame(Game):
         if len(active) <= 1:
             return
         active_ids = [p.id for p in active]
-        order = order_after_button(active_ids, self.table_state.get_button_id(active_ids))
+        ordered = sort_players_for_showdown(active, active_ids, self.table_state.get_button_id(active_ids), lambda p: p.id)
         scored: list[tuple[tuple[int, tuple[int, ...]], HoldemPlayer]] = []
-        for p in active:
+        for p in ordered:
             score, _ = best_hand(p.hand + self.community)
             scored.append((score, p))
-        scored.sort(key=lambda item: (item[0], -order.index(item[1].id)), reverse=True)
+        scored.sort(key=lambda item: (item[0], -ordered.index(item[1])), reverse=True)
         for score, p in scored:
             cards = read_cards(p.hand, "en")
             desc = describe_hand(score, "en")
@@ -948,8 +949,7 @@ class HoldemGame(Game):
         if len(winners) <= 1:
             return winners
         active_ids = [p.id for p in self.get_active_players()]
-        order = order_after_button(active_ids, self.table_state.get_button_id(active_ids))
-        return sorted(winners, key=lambda p: order.index(p.id) if p.id in order else len(order))
+        return order_winners_by_button(winners, active_ids, self.table_state.get_button_id(active_ids), lambda p: p.id)
 
     # ==========================================================================
     # Status actions
