@@ -423,7 +423,7 @@ class FiveCardDrawGame(Game):
         if not player:
             return
         p = player if isinstance(player, FiveCardDrawPlayer) else None
-        if not p or p.folded or p.all_in:
+        if not p or p.folded or (p.all_in and self.phase != "draw"):
             self._advance_turn()
             return
         self.announce_turn(turn_sound="game_3cardpoker/turn.ogg")
