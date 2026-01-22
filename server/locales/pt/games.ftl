@@ -70,15 +70,40 @@ suit-spades = espadas
 
 # Nomes das cartas
 rank-ace = ás
+rank-ace-plural = áses
 rank-two = 2
+rank-two-plural = 2
 rank-three = 3
+rank-three-plural = 3
 rank-four = 4
+rank-four-plural = 4
 rank-five = 5
+rank-five-plural = 5
 rank-six = 6
+rank-six-plural = 6
 rank-seven = 7
+rank-seven-plural = 7
 rank-eight = 8
+rank-eight-plural = 8
 rank-nine = 9
+rank-nine-plural = 9
 rank-ten = 10
+rank-ten-plural = 10
 rank-jack = valete
+rank-jack-plural = valetes
 rank-queen = dama
+rank-queen-plural = damas
 rank-king = rei
+rank-king-plural = reis
+
+# Descrições de mãos de pôquer
+poker-high-card-with = Carta alta, { $high }, com { $rest }
+poker-pair-with = Par de { $pair }, com { $rest }
+poker-two-pair-with = Dois pares, { $high } e { $low }, com { $kicker }
+poker-trips-with = Trinca de { $trips }, com { $rest }
+poker-straight-high = Sequência, { $high } alta
+poker-flush-high-with = Flush, { $high } alto, com { $rest }
+poker-full-house = Full house, { $trips } sobre { $pair }
+poker-quads-with = Quadra de { $quads }, com { $kicker }
+poker-straight-flush-high = Straight flush, { $high } alto
+poker-unknown-hand = Mão desconhecida
