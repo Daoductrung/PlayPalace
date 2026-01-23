@@ -8,6 +8,7 @@ and postflop hand category.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+import random
 
 from ...game_utils.poker_evaluator import best_hand
 from ...game_utils.poker_state import order_after_button
@@ -27,14 +28,19 @@ def bot_think(game: "HoldemGame", player: "HoldemPlayer") -> str | None:
     position = _position_index(game, player)
 
     can_raise_amount = _can_raise_amount(game, player, to_call)
+    variance = random.uniform(0.85, 1.2)
     if len(game.community) < 3:
         strength = _preflop_strength(player)
-        return _decide_preflop(strength, to_call, can_raise, stack_bb, position, can_raise_amount)
+        return _decide_preflop(
+            strength, to_call, can_raise, stack_bb, position, can_raise_amount, variance
+        )
 
     score = None
     if len(player.hand) + len(game.community) >= 5:
         score, _ = best_hand(player.hand + game.community)
-    return _decide_postflop(score, to_call, can_raise, stack_bb, position, can_raise_amount)
+    return _decide_postflop(
+        score, to_call, can_raise, stack_bb, position, can_raise_amount, variance
+    )
 
 
 def _position_index(game: "HoldemGame", player: "HoldemPlayer") -> int:
@@ -78,10 +84,15 @@ def _decide_preflop(
     stack_bb: float,
     position: int,
     can_raise_amount: bool,
+    variance: float,
 ) -> str:
     late_position = position >= 2
+    short_stack = stack_bb <= 12
+    loose = variance > 1.05
     if to_call == 0:
-        if can_raise and can_raise_amount and strength >= 2 and stack_bb >= 6:
+        if can_raise and can_raise_amount and (strength >= 2 or (strength >= 1 and loose)) and stack_bb >= 6:
+            return "raise"
+        if loose and can_raise and can_raise_amount and random.random() < 0.15:
             return "raise"
         return "call"
     if strength >= 3:
@@ -89,14 +100,14 @@ def _decide_preflop(
             return "raise"
         return "call"
     if strength == 2:
-        if to_call <= stack_bb and (late_position or stack_bb <= 10):
+        if to_call <= stack_bb * (1.5 if late_position or loose else 1.0) or short_stack:
             return "call"
         return "fold"
     if strength == 1:
-        if to_call <= max(1, stack_bb * 0.5) and late_position:
+        if to_call <= max(1, stack_bb * (0.7 if late_position or loose else 0.4)):
             return "call"
         return "fold"
-    if to_call <= max(1, stack_bb * 0.2) and late_position:
+    if to_call <= max(1, stack_bb * (0.3 if late_position or loose else 0.15)):
         return "call"
     return "fold"
 
@@ -108,23 +119,27 @@ def _decide_postflop(
     stack_bb: float,
     position: int,
     can_raise_amount: bool,
+    variance: float,
 ) -> str:
     late_position = position >= 2
+    loose = variance > 1.05
     if to_call == 0:
         if score and score[0] >= 2 and can_raise and can_raise_amount and stack_bb >= 6:
+            return "raise"
+        if loose and can_raise and can_raise_amount and random.random() < 0.2:
             return "raise"
         return "call"
     if score and score[0] >= 4:
         return "raise" if can_raise and can_raise_amount and stack_bb >= 6 else "call"
     if score and score[0] >= 2:
-        if to_call <= max(1, stack_bb * 2):
+        if to_call <= max(1, stack_bb * (2.5 if loose else 2)):
             return "call"
         return "fold"
     if score and score[0] >= 1:
-        if to_call <= max(1, stack_bb) and late_position:
+        if to_call <= max(1, stack_bb * (1.3 if late_position or loose else 1.0)):
             return "call"
         return "fold"
-    if to_call <= max(1, stack_bb * 0.5) and late_position:
+    if to_call <= max(1, stack_bb * (0.7 if late_position or loose else 0.4)):
         return "call"
     return "fold"
 
