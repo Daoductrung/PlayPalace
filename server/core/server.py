@@ -322,11 +322,13 @@ class Server:
     LANGUAGES = {
         "en": "English",
         "pt": "Português",
+        "vi": "Tiếng Việt",
         "zh": "中文",
     }
     LANGUAGES_ENGLISH = {
         "en": "English",
         "pt": "Portuguese",
+        "vi": "Vietnamese",
         "zh": "Chinese",
     }
 
