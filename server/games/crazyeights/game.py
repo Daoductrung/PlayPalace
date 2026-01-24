@@ -340,6 +340,8 @@ class CrazyEightsGame(Game):
         if not turn_set:
             return
         turn_set.remove_by_prefix("play_card_")
+        turn_set.remove("draw")
+        turn_set.remove("pass")
         if self.status != "playing" or player.is_spectator or self.current_player != player:
             return
         for card in player.hand:
@@ -354,6 +356,24 @@ class CrazyEightsGame(Game):
                     show_in_actions_menu=False,
                 )
             )
+        turn_set.add(
+            Action(
+                id="draw",
+                label=Localization.get(self._player_locale(player), "crazyeights-draw"),
+                handler="_action_draw",
+                is_enabled="_is_draw_enabled",
+                is_hidden="_is_draw_hidden",
+            )
+        )
+        turn_set.add(
+            Action(
+                id="pass",
+                label=Localization.get(self._player_locale(player), "crazyeights-pass"),
+                handler="_action_pass",
+                is_enabled="_is_pass_enabled",
+                is_hidden="_is_pass_hidden",
+            )
+        )
 
     # ==========================================================================
     # Game flow
@@ -531,6 +551,7 @@ class CrazyEightsGame(Game):
         self.turn_drawn_card = None
 
         self._play_card_sound(card)
+        self._broadcast_play(p, card)
 
         if card.rank == 8:
             self.awaiting_wild_suit = True
@@ -577,7 +598,9 @@ class CrazyEightsGame(Game):
         sound = "game_crazyeights/drawPlayable.ogg" if playable else "game_crazyeights/draw.ogg"
         self.play_sound(sound)
         self._start_turn_timer()  # reset timer after drawing
-        self.update_player_menu(p)
+        self._broadcast_draw(p, 1)
+        selection_id = f"play_card_{card.id}" if playable else None
+        self.update_player_menu(p, selection_id=selection_id)
 
     def _action_pass(self, player: Player, action_id: str) -> None:
         p = self._require_active_player(player)
@@ -586,6 +609,7 @@ class CrazyEightsGame(Game):
         if not self.turn_has_drawn:
             return
         self.play_sound("game_crazyeights/pass.ogg")
+        self._broadcast_pass(p)
         self.turn_has_drawn = False
         self.turn_drawn_card = None
         self._advance_turn()
@@ -875,6 +899,8 @@ class CrazyEightsGame(Game):
             card = self._draw_card()
             if card:
                 player.hand.append(card)
+        if count > 0:
+            self._broadcast_draw(player, count)
 
     def _next_player(self) -> CrazyEightsPlayer | None:
         if not self.turn_player_ids:
@@ -964,6 +990,10 @@ class CrazyEightsGame(Game):
             return Localization.get(locale, "crazyeights-wild")
         return self.format_card(top, locale)
 
+    def _player_locale(self, player: Player) -> str:
+        user = self.get_user(player)
+        return user.locale if user else "en"
+
     # ==========================================================================
     # Scoring / end of hand
     # ==========================================================================
@@ -1049,6 +1079,32 @@ class CrazyEightsGame(Game):
                 continue
             suit_name = self._suit_name(suit, user.locale)
             user.speak_l("crazyeights-suit-chosen", suit=suit_name)
+
+    def _broadcast_play(self, player: CrazyEightsPlayer, card: Card) -> None:
+        for p in self.players:
+            user = self.get_user(p)
+            if not user:
+                continue
+            user.speak_l(
+                "crazyeights-player-plays",
+                player=player.name,
+                card=self.format_card(card, user.locale),
+            )
+
+    def _broadcast_draw(self, player: CrazyEightsPlayer, count: int) -> None:
+        key = "crazyeights-player-draws-one" if count == 1 else "crazyeights-player-draws-many"
+        for p in self.players:
+            user = self.get_user(p)
+            if not user:
+                continue
+            user.speak_l(key, player=player.name, count=count)
+
+    def _broadcast_pass(self, player: CrazyEightsPlayer) -> None:
+        for p in self.players:
+            user = self.get_user(p)
+            if not user:
+                continue
+            user.speak_l("crazyeights-player-passes", player=player.name)
 
     def _play_round_end_sounds(
         self,

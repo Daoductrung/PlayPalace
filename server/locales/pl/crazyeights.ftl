@@ -34,3 +34,8 @@ crazyeights-round-winner = { $player } wins { $points } points. { $detail }
 crazyeights-round-points-from = { $points } from { $player }
 
 crazyeights-game-winner = { $player } wins with { $score } points.
+
+crazyeights-player-plays = { $player } plays { $card }.
+crazyeights-player-draws-one = { $player } draws a card.
+crazyeights-player-draws-many = { $player } draws { $count } cards.
+crazyeights-player-passes = { $player } passes.
