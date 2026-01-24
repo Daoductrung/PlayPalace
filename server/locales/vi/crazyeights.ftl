@@ -2,40 +2,40 @@
 
 game-name-crazyeights = Crazy Eights
 
-crazyeights-set-winning-score = Winning score: { $score }
-crazyeights-enter-winning-score = Enter winning score
-crazyeights-option-changed-winning-score = Winning score set to { $score }.
+crazyeights-set-winning-score = Điểm chiến thắng: { $score }
+crazyeights-enter-winning-score = Nhập điểm chiến thắng
+crazyeights-option-changed-winning-score = Điểm chiến thắng đã đặt là { $score }.
 
-crazyeights-set-turn-timer = Turn timer: { $mode }
-crazyeights-select-turn-timer = Select turn timer
-crazyeights-option-changed-turn-timer = Turn timer set to { $mode }.
+crazyeights-set-turn-timer = Thời gian lượt: { $mode }
+crazyeights-select-turn-timer = Chọn thời gian lượt
+crazyeights-option-changed-turn-timer = Thời gian lượt đã đặt là { $mode }.
 
-crazyeights-draw = Draw
-crazyeights-pass = Pass
-crazyeights-read-top = Read top card
-crazyeights-read-counts = Read card counts
+crazyeights-draw = Rút bài
+crazyeights-pass = Bỏ lượt
+crazyeights-read-top = Xem bài trên cùng
+crazyeights-read-counts = Xem số lượng bài còn lại
 
-crazyeights-new-hand = Round { $round }.
-crazyeights-start-card = { $player } turns up { $card }.
-crazyeights-wild-played = { $player } played a Wild.
+crazyeights-new-hand = Vòng { $round }.
+crazyeights-start-card = { $player } lật lên lá { $card }.
+crazyeights-wild-played = { $player } đã đánh một lá Wild.
 
-crazyeights-no-players = No players.
-crazyeights-no-top = No top card.
+crazyeights-no-players = Không có người chơi.
+crazyeights-no-top = Không có lá bài trên cùng.
 
-crazyeights-wild = Wild
-crazyeights-wild-suit = Wild, { $suit }
-crazyeights-reverse = Reverse of { $suit }
-crazyeights-skip = Skip of { $suit }
-crazyeights-draw-two = Draw Two of { $suit }
+crazyeights-wild = Lá Wild (Đổi chất)
+crazyeights-wild-suit = Lá Wild, { $suit }
+crazyeights-reverse = Đảo chiều { $suit }
+crazyeights-skip = Mất lượt { $suit }
+crazyeights-draw-two = Rút Hai { $suit }
 
-crazyeights-suit-chosen = Suit is now { $suit }.
+crazyeights-suit-chosen = Chất bài giờ là { $suit }.
 
-crazyeights-round-winner = { $player } wins { $points } points. { $detail }
-crazyeights-round-points-from = { $points } from { $player }
+crazyeights-round-winner = { $player } thắng { $points } điểm. { $detail }
+crazyeights-round-points-from = { $points } từ { $player }
 
-crazyeights-game-winner = { $player } wins with { $score } points.
+crazyeights-game-winner = { $player } thắng chung cuộc với { $score } điểm.
 
-crazyeights-player-plays = { $player } plays { $card }.
-crazyeights-player-draws-one = { $player } draws a card.
-crazyeights-player-draws-many = { $player } draws { $count } cards.
-crazyeights-player-passes = { $player } passes.
+crazyeights-player-plays = { $player } đánh lá { $card }.
+crazyeights-player-draws-one = { $player } rút một lá bài.
+crazyeights-player-draws-many = { $player } rút { $count } lá bài.
+crazyeights-player-passes = { $player } bỏ lượt.
