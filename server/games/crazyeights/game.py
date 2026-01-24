@@ -127,7 +127,7 @@ class CrazyEightsGame(Game):
         player = super().add_player(name, user)
         sound = "game_crazyeights/botsit.ogg" if player.is_bot else "game_crazyeights/personsit.ogg"
         self.play_sound(sound)
-        user.play_music("game_crazyeights/us.ogg")
+        user.play_music("game_crazyeights/mus.ogg")
         return player
 
     def _action_add_bot(self, player: Player, bot_name: str, action_id: str) -> None:
@@ -396,7 +396,7 @@ class CrazyEightsGame(Game):
         self.wild_end_round_pending = False
 
         # Replace main menu music with a silent track for this game.
-        self.play_music("game_crazyeights/us.ogg")
+        self.play_music("game_crazyeights/mus.ogg")
 
         self._team_manager.team_mode = "individual"
         self._team_manager.setup_teams([p.name for p in self.players])
@@ -407,7 +407,7 @@ class CrazyEightsGame(Game):
 
     def initialize_lobby(self, host_name: str, host_user: User) -> None:  # type: ignore[override]
         super().initialize_lobby(host_name, host_user)
-        self.play_music("game_crazyeights/us.ogg")
+        self.play_music("game_crazyeights/mus.ogg")
 
     def on_tick(self) -> None:
         super().on_tick()
