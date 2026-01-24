@@ -108,14 +108,6 @@ class GameSoundMixin:
             if user:
                 user.play_music(name, looping)
 
-    def stop_music(self) -> None:
-        """Stop music for all players."""
-        self.current_music = ""
-        for player in self.players:
-            user = self.get_user(player)
-            if user:
-                user.stop_music()
-
     def play_ambience(self, loop: str, intro: str = "", outro: str = "") -> None:
         """Play ambient sound for all players."""
         self.current_ambience = loop

@@ -78,6 +78,9 @@ class CrazyEightsGame(Game):
 
     awaiting_wild_suit: bool = False
     pending_round_winner_id: str | None = None
+    wild_wait_ticks: int = 0
+    wild_wait_player_id: str | None = None
+    wild_end_round_pending: bool = False
 
     turn_has_drawn: bool = False
     turn_drawn_card: Card | None = None
@@ -124,6 +127,7 @@ class CrazyEightsGame(Game):
         player = super().add_player(name, user)
         sound = "game_crazyeights/botsit.ogg" if player.is_bot else "game_crazyeights/personsit.ogg"
         self.play_sound(sound)
+        user.play_music("game_crazyeights/us.ogg")
         return player
 
     def _action_add_bot(self, player: Player, bot_name: str, action_id: str) -> None:
@@ -387,10 +391,12 @@ class CrazyEightsGame(Game):
         self.turn_direction = 1
         self.awaiting_wild_suit = False
         self.pending_round_winner_id = None
+        self.wild_wait_ticks = 0
+        self.wild_wait_player_id = None
+        self.wild_end_round_pending = False
 
-        # Stop main menu music
-        self.stop_ambience()
-        self.stop_music()
+        # Replace main menu music with a silent track for this game.
+        self.play_music("game_crazyeights/us.ogg")
 
         self._team_manager.team_mode = "individual"
         self._team_manager.setup_teams([p.name for p in self.players])
@@ -401,14 +407,25 @@ class CrazyEightsGame(Game):
 
     def initialize_lobby(self, host_name: str, host_user: User) -> None:  # type: ignore[override]
         super().initialize_lobby(host_name, host_user)
-        # Stop main menu music when entering the table.
-        self.stop_ambience()
-        self.stop_music()
+        self.play_music("game_crazyeights/us.ogg")
 
     def on_tick(self) -> None:
         super().on_tick()
         self.process_scheduled_sounds()
         if not self.game_active:
+            return
+        if self.wild_wait_ticks > 0:
+            self.wild_wait_ticks -= 1
+            if self.wild_wait_ticks == 0:
+                if self.wild_end_round_pending and self.wild_wait_player_id:
+                    player = self.get_player_by_id(self.wild_wait_player_id)
+                    if isinstance(player, CrazyEightsPlayer):
+                        self.wild_end_round_pending = False
+                        self.wild_wait_player_id = None
+                        self._end_round(player, last_card=None)
+                        return
+                self.wild_wait_player_id = None
+                self._advance_turn()
             return
         if self.hand_wait_ticks > 0:
             self.hand_wait_ticks -= 1
@@ -431,6 +448,9 @@ class CrazyEightsGame(Game):
         self.turn_skip_count = 0
         self.awaiting_wild_suit = False
         self.pending_round_winner_id = None
+        self.wild_wait_ticks = 0
+        self.wild_wait_player_id = None
+        self.wild_end_round_pending = False
         self.turn_has_drawn = False
         self.turn_drawn_card = None
 
@@ -654,16 +674,18 @@ class CrazyEightsGame(Game):
             return
         self.current_suit = suit
         self.awaiting_wild_suit = False
+        self.play_sound("game_crazyeights/morf.ogg")
         self.schedule_sound(self._suit_sound(suit), delay_ticks=10)
         self._broadcast_suit_chosen(suit)
         if p.is_bot:
             BotHelper.jolt_bot(p, ticks=random.randint(20, 30))
 
+        self.timer.clear()
+        self.wild_wait_ticks = 10
+        self.wild_wait_player_id = p.id
         if self.pending_round_winner_id == p.id:
-            self._end_round(p, last_card=None)
-            return
-
-        self._advance_turn()
+            self.wild_end_round_pending = True
+        return
 
     def _action_read_top(self, player: Player, action_id: str) -> None:
         user = self.get_user(player)
@@ -719,6 +741,8 @@ class CrazyEightsGame(Game):
         if self.status != "playing" or player.is_spectator:
             return Visibility.HIDDEN
         if self.current_player != player:
+            return Visibility.HIDDEN
+        if self.wild_wait_ticks > 0:
             return Visibility.HIDDEN
         return Visibility.VISIBLE
 
@@ -901,7 +925,6 @@ class CrazyEightsGame(Game):
     def _play_card_sound(self, card: Card) -> None:
         if card.rank == 8:
             self.play_sound("game_crazyeights/discwild.ogg")
-            self.schedule_sound("game_crazyeights/morf.ogg", delay_ticks=1)
         elif card.rank == 13:
             self.play_sound("game_crazyeights/discdraw.ogg")
         elif card.rank == 12:
