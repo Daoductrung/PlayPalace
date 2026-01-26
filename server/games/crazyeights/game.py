@@ -95,7 +95,7 @@ class CrazyEightsGame(Game):
     intro_wait_ticks: int = 0
     hand_wait_ticks: int = 0
     _turn_sound_player_id: str | None = None
-    max_hand_size: int = 12
+    max_hand_size: int = 15 # future removal
 
     def __post_init__(self):
         super().__post_init__()
@@ -474,8 +474,8 @@ class CrazyEightsGame(Game):
         for p in active_players:
             p.hand = []
 
-        # Deal 7 cards to each
-        for _ in range(7):
+        # Deal 5 cards to each
+        for _ in range(5):
             for p in active_players:
                 card = self.deck.draw_one()
                 if card:
@@ -1125,7 +1125,6 @@ class CrazyEightsGame(Game):
             user = self.get_user(p)
             if user:
                 user.remove_menu("turn_menu")
-        self.rebuild_all_menus()
 
     def _hand_points(self, hand: list[Card]) -> int:
         total = 0
