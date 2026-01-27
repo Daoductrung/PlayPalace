@@ -282,5 +282,5 @@ transfer-ownership = Transfer Ownership
 transfer-ownership-menu-title = Transfer Ownership
 no-admins-for-transfer = No admins available to transfer ownership to.
 confirm-transfer-ownership = Are you sure you want to transfer server ownership to { $player }? You will be demoted to admin.
-transfer-ownership-announcement = { $player } is now the server owner!
-transfer-ownership-announcement-you = You are now the server owner!
+transfer-ownership-announcement = { $player } is now the Play Palace server owner!
+transfer-ownership-announcement-you = You are now the Play palace server owner!

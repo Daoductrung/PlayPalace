@@ -321,5 +321,5 @@ transfer-ownership = Передать владение
 transfer-ownership-menu-title = Передача владения
 no-admins-for-transfer = Нет администраторов для передачи владения.
 confirm-transfer-ownership = Вы уверены, что хотите передать владение сервером игроку { $player }? Вы станете администратором.
-transfer-ownership-announcement = { $player } теперь владелец сервера!
-transfer-ownership-announcement-you = Вы теперь владелец сервера!
+transfer-ownership-announcement = { $player } теперь владелец сервера Play Palace!
+transfer-ownership-announcement-you = Вы теперь владелец сервера Play Palace!

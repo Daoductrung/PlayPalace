@@ -72,6 +72,10 @@ user-offline = { $player } saiu.
 online-users-none = Nenhum usuário online.
 online-users-one = 1 usuário: { $users }
 online-users-many = { $count } usuários: { $users }
+online-user-not-in-game = Fora do jogo
+online-user-waiting-approval = Aguardando aprovação
+user-is-admin = { $player } é um administrador do PlayPalace.
+user-is-server-owner = { $player } é o proprietário do servidor PlayPalace.
 
 # Opções
 language = Idioma
@@ -188,3 +192,52 @@ action-need-more-humans = Necessário mais jogadores humanos.
 confirm-leave-game = Tem certeza de que deseja sair da mesa?
 confirm-yes = Sim
 confirm-no = Não
+
+# Administração
+administration = Administração
+admin-menu-title = Administração
+
+# Aprovação de contas
+account-approval = Aprovação de Contas
+account-approval-menu-title = Aprovação de Contas
+no-pending-accounts = Não há contas pendentes.
+approve-account = Aprovar
+decline-account = Recusar
+account-approved = A conta de { $player } foi aprovada.
+account-declined = A conta de { $player } foi recusada e excluída.
+
+# Aguardando aprovação (mostrado a usuários não aprovados)
+waiting-for-approval = Sua conta está aguardando aprovação de um administrador. Por favor, aguarde...
+account-approved-welcome = Sua conta foi aprovada! Bem-vindo ao PlayPalace!
+account-declined-goodbye = Sua solicitação de conta foi recusada.
+
+# Notificações de admin para solicitações de conta
+account-request = solicitação de conta
+account-action = ação de conta realizada
+
+# Promoção/rebaixamento de admin
+promote-admin = Promover Admin
+demote-admin = Rebaixar Admin
+promote-admin-menu-title = Promover Admin
+demote-admin-menu-title = Rebaixar Admin
+no-users-to-promote = Não há usuários disponíveis para promover.
+no-admins-to-demote = Não há admins disponíveis para rebaixar.
+confirm-promote = Tem certeza de que deseja promover { $player } a admin?
+confirm-demote = Tem certeza de que deseja rebaixar { $player } de admin?
+broadcast-to-all = Anunciar a todos os usuários
+broadcast-to-admins = Anunciar apenas aos admins
+broadcast-to-nobody = Silencioso (sem anúncio)
+promote-announcement = { $player } foi promovido a admin!
+promote-announcement-you = Você foi promovido a admin!
+demote-announcement = { $player } foi rebaixado de admin.
+demote-announcement-you = Você foi rebaixado de admin.
+not-admin-anymore = Você não é mais um admin e não pode realizar esta ação.
+not-server-owner = Apenas o proprietário do servidor pode realizar esta ação.
+
+# Transferência de propriedade do servidor
+transfer-ownership = Transferir Propriedade
+transfer-ownership-menu-title = Transferir Propriedade
+no-admins-for-transfer = Não há admins disponíveis para transferir a propriedade.
+confirm-transfer-ownership = Tem certeza de que deseja transferir a propriedade do servidor para { $player }? Você será rebaixado a admin.
+transfer-ownership-announcement = { $player } agora é o proprietário do servidor Play Palace!
+transfer-ownership-announcement-you = Você agora é o proprietário do servidor Play Palace!

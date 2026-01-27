@@ -282,5 +282,5 @@ transfer-ownership = Chuyển quyền sở hữu
 transfer-ownership-menu-title = Chuyển quyền sở hữu
 no-admins-for-transfer = Không có Admin nào để chuyển quyền sở hữu.
 confirm-transfer-ownership = Bạn có chắc muốn chuyển quyền sở hữu máy chủ cho { $player } không? Bạn sẽ trở thành Admin.
-transfer-ownership-announcement = { $player } giờ là chủ sở hữu máy chủ!
-transfer-ownership-announcement-you = Bạn giờ là chủ sở hữu máy chủ!
+transfer-ownership-announcement = { $player } giờ là chủ sở hữu máy chủ Play Palace!
+transfer-ownership-announcement-you = Bạn giờ là chủ sở hữu máy chủ Play Palace!

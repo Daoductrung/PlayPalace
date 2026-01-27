@@ -182,3 +182,52 @@ action-need-more-humans = 需要更多人类玩家。
 confirm-leave-game = 确定要离开桌子吗？
 confirm-yes = 是
 confirm-no = 否
+
+# 管理
+administration = 管理
+admin-menu-title = 管理
+
+# 账户审批
+account-approval = 账户审批
+account-approval-menu-title = 账户审批
+no-pending-accounts = 没有待审批的账户。
+approve-account = 批准
+decline-account = 拒绝
+account-approved = { $player } 的账户已被批准。
+account-declined = { $player } 的账户已被拒绝并删除。
+
+# 等待审批（显示给未审批用户）
+waiting-for-approval = 您的账户正在等待管理员审批，请稍候...
+account-approved-welcome = 您的账户已获批准！欢迎来到 PlayPalace！
+account-declined-goodbye = 您的账户申请已被拒绝。
+
+# 账户请求的管理员通知
+account-request = 账户请求
+account-action = 账户操作已完成
+
+# 管理员升级/降级
+promote-admin = 升级为管理员
+demote-admin = 降级管理员
+promote-admin-menu-title = 升级为管理员
+demote-admin-menu-title = 降级管理员
+no-users-to-promote = 没有可升级的用户。
+no-admins-to-demote = 没有可降级的管理员。
+confirm-promote = 确定要将 { $player } 升级为管理员吗？
+confirm-demote = 确定要将 { $player } 从管理员降级吗？
+broadcast-to-all = 向所有用户宣布
+broadcast-to-admins = 仅向管理员宣布
+broadcast-to-nobody = 静默（不宣布）
+promote-announcement = { $player } 已被升级为管理员！
+promote-announcement-you = 您已被升级为管理员！
+demote-announcement = { $player } 已被降级。
+demote-announcement-you = 您已被降级。
+not-admin-anymore = 您已不再是管理员，无法执行此操作。
+not-server-owner = 只有服务器所有者才能执行此操作。
+
+# 服务器所有权转移
+transfer-ownership = 转移所有权
+transfer-ownership-menu-title = 转移所有权
+no-admins-for-transfer = 没有可转移所有权的管理员。
+confirm-transfer-ownership = 确定要将服务器所有权转移给 { $player } 吗？您将被降级为管理员。
+transfer-ownership-announcement = { $player } 现在是 Play Palace 服务器的所有者！
+transfer-ownership-announcement-you = 您现在是 Play Palace 服务器的所有者！

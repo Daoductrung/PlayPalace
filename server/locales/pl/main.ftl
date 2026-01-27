@@ -72,6 +72,10 @@ user-offline = { $player } poszedł offline
 online-users-none = Brak użytkowników online.
 online-users-one = 1 użytkownik: { $users }
 online-users-many = { $count } użytkowników: { $users }
+online-user-not-in-game = Nie w grze
+online-user-waiting-approval = Oczekuje na zatwierdzenie
+user-is-admin = { $player } jest administratorem PlayPalace.
+user-is-server-owner = { $player } jest właścicielem serwera PlayPalace.
 
 # Options
 language = Język
@@ -228,3 +232,52 @@ action-need-more-humans = Potrzeba więcej ludzi
 confirm-leave-game = Czy na pewno chcesz opuścić stół?
 confirm-yes = Tak
 confirm-no = Nie
+
+# Administration
+administration = Administracja
+admin-menu-title = Administracja
+
+# Account approval
+account-approval = Zatwierdzanie kont
+account-approval-menu-title = Zatwierdzanie kont
+no-pending-accounts = Brak kont oczekujących.
+approve-account = Zatwierdź
+decline-account = Odrzuć
+account-approved = Konto gracza { $player } zostało zatwierdzone.
+account-declined = Konto gracza { $player } zostało odrzucone i usunięte.
+
+# Waiting for approval (shown to unapproved users)
+waiting-for-approval = Twoje konto oczekuje na zatwierdzenie przez administratora. Proszę czekać...
+account-approved-welcome = Twoje konto zostało zatwierdzone! Witaj w PlayPalace!
+account-declined-goodbye = Twoja prośba o konto została odrzucona.
+
+# Admin notifications for account requests
+account-request = prośba o konto
+account-action = podjęto działanie dotyczące konta
+
+# Admin promotion/demotion
+promote-admin = Awansuj na admina
+demote-admin = Degraduj admina
+promote-admin-menu-title = Awansuj na admina
+demote-admin-menu-title = Degraduj admina
+no-users-to-promote = Brak użytkowników do awansowania.
+no-admins-to-demote = Brak adminów do degradacji.
+confirm-promote = Czy na pewno chcesz awansować { $player } na admina?
+confirm-demote = Czy na pewno chcesz zdegradować { $player } z funkcji admina?
+broadcast-to-all = Ogłoś wszystkim użytkownikom
+broadcast-to-admins = Ogłoś tylko adminom
+broadcast-to-nobody = Cicho (bez ogłoszenia)
+promote-announcement = { $player } został awansowany na admina!
+promote-announcement-you = Zostałeś awansowany na admina!
+demote-announcement = { $player } został zdegradowany z funkcji admina.
+demote-announcement-you = Zostałeś zdegradowany z funkcji admina.
+not-admin-anymore = Nie jesteś już adminem i nie możesz wykonać tej akcji.
+not-server-owner = Tylko właściciel serwera może wykonać tę akcję.
+
+# Server ownership transfer
+transfer-ownership = Przekaż własność
+transfer-ownership-menu-title = Przekaż własność
+no-admins-for-transfer = Brak adminów, którym można przekazać własność.
+confirm-transfer-ownership = Czy na pewno chcesz przekazać własność serwera graczowi { $player }? Zostaniesz zdegradowany do admina.
+transfer-ownership-announcement = { $player } jest teraz właścicielem serwera Play Palace!
+transfer-ownership-announcement-you = Jesteś teraz właścicielem serwera Play Palace!
