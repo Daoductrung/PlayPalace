@@ -323,6 +323,7 @@ class Server(AdministrationMixin):
 
         # Check if user is banned
         if user.trust_level == TrustLevel.BANNED:
+            user.play_sound("accountban.ogg")
             user.speak_l("account-banned")
             for msg in user.get_queued_messages():
                 await user.connection.send(msg)

@@ -759,6 +759,7 @@ class AdministrationMixin:
                     )
                 # Combine into single message for the dialog
                 full_message = f"{decline_message}\n{display_reason}"
+                waiting_user.play_sound("accountdeny.ogg")
                 waiting_user.speak(full_message)
                 # Flush queued messages before disconnect so client receives them
                 for msg in waiting_user.get_queued_messages():
@@ -938,6 +939,7 @@ class AdministrationMixin:
                 display_reason = Localization.get(target_user.locale, "ban-no-reason")
             # Combine into single message for the dialog
             full_message = f"{ban_message}\n{display_reason}"
+            target_user.play_sound("accountban.ogg")
             target_user.speak(full_message)
             # Flush queued messages before disconnect so client receives them
             for msg in target_user.get_queued_messages():
@@ -965,12 +967,12 @@ class AdministrationMixin:
         if broadcast_scope == "nobody":
             # Silent mode - only notify the server owner who performed the action
             owner.speak_l("user-unbanned", player=username)
-            owner.play_sound("accountunban.ogg")
+            owner.play_sound("accountapprove.ogg")
         else:
             # Broadcast to all or admins
             self._broadcast_admin_change(
                 "user-unbanned",
-                "accountunban.ogg",
+                "accountapprove.ogg",
                 username,
                 broadcast_scope,
             )
