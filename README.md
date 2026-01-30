@@ -115,6 +115,19 @@ The test suite includes unit tests, integration tests, and "play tests" that run
 
 See also: CLI tool.
 
+#### Bootstrapping the First Admin
+
+Fresh databases contain zero users. The server still allows the first remote registration for backwards compatibility, but production deployments should explicitly seed the owner account before exposing the port. Use the CLI helper:
+
+```bash
+cd server
+uv run python -m server.cli bootstrap-owner --username admin
+```
+
+The command prompts for a password (or accept `--password-file/--password-stdin`) and creates an approved `SERVER_OWNER` user. Passing `--force` lets you update an existing account’s password/trust level if you’re repairing a database.
+
+When the server starts and finds zero users, it now prints a warning reminding you to run the bootstrap command. Automated test environments can silence the message by setting `PLAYPALACE_SUPPRESS_BOOTSTRAP_WARNING=1`, but this is not recommended for real deployments.
+
 ## Available Games
 
 Note: many games are still works in progress.
