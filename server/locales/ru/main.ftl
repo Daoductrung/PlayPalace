@@ -289,7 +289,7 @@ account-approved = Аккаунт игрока { $player } одобрен.
 account-declined = Запрос игрока { $player } отклонён, аккаунт удалён.
 
 # Waiting for approval (shown to unapproved users)
-waiting-for-approval = Ваш аккаунт ожидает подтверждения администратором. Пожалуйста, подождите...
+waiting-for-approval = Ваш аккаунт ожидает подтверждения администратором.
 account-approved-welcome = Ваш аккаунт одобрен! Добро пожаловать в PlayPalace!
 account-declined-goodbye = Ваш запрос на создание аккаунта был отклонён.
     Причина:

@@ -250,7 +250,7 @@ account-approved = Tài khoản của { $player } đã được phê duyệt.
 account-declined = Tài khoản của { $player } đã bị từ chối và xóa bỏ.
 
 # Chờ phê duyệt (hiện cho người dùng chưa được duyệt)
-waiting-for-approval = Tài khoản của bạn đang chờ quản trị viên phê duyệt. Vui lòng đợi...
+waiting-for-approval = Tài khoản của bạn đang chờ quản trị viên phê duyệt.
 account-approved-welcome = Tài khoản của bạn đã được phê duyệt! Chào mừng đến với PlayPalace!
 account-declined-goodbye = Yêu cầu tạo tài khoản của bạn đã bị từ chối.
     Lý do:

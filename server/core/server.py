@@ -264,16 +264,17 @@ class Server(AdministrationMixin):
         elif packet_type == "ping":
             # Always allow ping to keep connection alive
             await self._handle_ping(client)
+        elif packet_type == "menu":
+            # Allow menu selections for all authenticated users (including unapproved)
+            await self._handle_menu(client, packet)
         else:
             # For all other packets, check if user is approved
             user = self._users.get(client.username)
             if user and not user.approved:
-                # Unapproved users can only ping - drop all other packets
+                # Unapproved users can only ping and use menus - drop all other packets
                 return
 
-            if packet_type == "menu":
-                await self._handle_menu(client, packet)
-            elif packet_type == "keybind":
+            if packet_type == "keybind":
                 await self._handle_keybind(client, packet)
             elif packet_type == "editbox":
                 await self._handle_editbox(client, packet)
@@ -390,8 +391,9 @@ class Server(AdministrationMixin):
 
         # Check if user is approved
         if not user.approved:
-            # User needs approval - show waiting screen
-            self._show_waiting_for_approval(user)
+            # User needs approval - show limited main menu
+            user.speak_l("waiting-for-approval")
+            self._show_main_menu(user)
             return
 
         # Broadcast online announcement (only for approved, non-banned users)
@@ -487,28 +489,39 @@ class Server(AdministrationMixin):
 
     def _show_main_menu(self, user: NetworkUser) -> None:
         """Show the main menu to a user."""
-        items = [
-            MenuItem(text=Localization.get(user.locale, "play"), id="play"),
-            MenuItem(
-                text=Localization.get(user.locale, "view-active-tables"),
-                id="active_tables",
-            ),
-            MenuItem(
-                text=Localization.get(user.locale, "saved-tables"), id="saved_tables"
-            ),
-            MenuItem(
-                text=Localization.get(user.locale, "leaderboards"), id="leaderboards"
-            ),
-            MenuItem(
-                text=Localization.get(user.locale, "my-stats"), id="my_stats"
-            ),
-            MenuItem(text=Localization.get(user.locale, "options"), id="options"),
-        ]
-        # Add administration menu for admins
-        if user.trust_level.value >= TrustLevel.ADMIN.value:
-            items.append(
-                MenuItem(text=Localization.get(user.locale, "administration"), id="administration")
-            )
+        items = []
+        if user.approved:
+            # Full menu for approved users
+            items = [
+                MenuItem(text=Localization.get(user.locale, "play"), id="play"),
+                MenuItem(
+                    text=Localization.get(user.locale, "view-active-tables"),
+                    id="active_tables",
+                ),
+                MenuItem(
+                    text=Localization.get(user.locale, "saved-tables"), id="saved_tables"
+                ),
+                MenuItem(
+                    text=Localization.get(user.locale, "leaderboards"), id="leaderboards"
+                ),
+                MenuItem(
+                    text=Localization.get(user.locale, "my-stats"), id="my_stats"
+                ),
+                MenuItem(text=Localization.get(user.locale, "options"), id="options"),
+            ]
+            # Add administration menu for admins
+            if user.trust_level.value >= TrustLevel.ADMIN.value:
+                items.append(
+                    MenuItem(text=Localization.get(user.locale, "administration"), id="administration")
+                )
+        else:
+            # Limited menu for users waiting for approval
+            items = [
+                MenuItem(
+                    text=Localization.get(user.locale, "leaderboards"), id="leaderboards"
+                ),
+                MenuItem(text=Localization.get(user.locale, "options"), id="options"),
+            ]
         items.append(MenuItem(text=Localization.get(user.locale, "logout"), id="logout"))
         user.show_menu(
             "main_menu",
@@ -752,12 +765,6 @@ class Server(AdministrationMixin):
             escape_behavior=EscapeBehavior.SELECT_LAST,
         )
         self._user_states[user.username] = {"menu": "language_menu"}
-
-    def _show_waiting_for_approval(self, user: NetworkUser) -> None:
-        """Show waiting for approval screen to unapproved user."""
-        user.speak_l("waiting-for-approval")
-        user.clear_ui()
-        self._user_states[user.username] = {"menu": "waiting_for_approval"}
 
     def _show_saved_tables_menu(self, user: NetworkUser) -> None:
         """Show saved tables menu."""

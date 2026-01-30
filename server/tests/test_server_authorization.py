@@ -75,10 +75,7 @@ async def test_authorize_registers_and_waits_for_approval(monkeypatch, server):
 
     server._send_game_list = fake_send_game_list
 
-    waiting = []
-    server._show_waiting_for_approval = waiting.append
     main_menu_calls = []
-    played_music = []
 
     def fake_show_main_menu(user):
         main_menu_calls.append(user.username)
@@ -95,8 +92,7 @@ async def test_authorize_registers_and_waits_for_approval(monkeypatch, server):
     assert notifications == [("account-request", "accountrequest.ogg")]
     assert client.authenticated and client.username == "newbie"
     assert sent_game_list == ["newbie"]
-    assert waiting and waiting[0].username == "newbie"
-    assert main_menu_calls == []
+    assert main_menu_calls == ["newbie"]
     assert "newbie" in server._users
 
 
@@ -123,7 +119,6 @@ async def test_authorize_existing_admin_announces(monkeypatch, server):
     server._broadcast_presence_l = lambda msg, player, sound: broadcasts.append((msg, player, sound))
     server._broadcast_admin_announcement = lambda player: broadcasts.append(("admin", player))
     server._broadcast_server_owner_announcement = lambda player: broadcasts.append(("owner", player))
-    server._show_waiting_for_approval = lambda user: (_ for _ in ()).throw(AssertionError("should not wait"))
     main_menu_calls = []
     server._show_main_menu = lambda user: main_menu_calls.append(user.username)
     server._notify_admins = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not notify"))

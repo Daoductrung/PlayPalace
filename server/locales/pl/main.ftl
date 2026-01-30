@@ -247,7 +247,7 @@ account-approved = Konto gracza { $player } zostało zatwierdzone.
 account-declined = Konto gracza { $player } zostało odrzucone i usunięte.
 
 # Waiting for approval (shown to unapproved users)
-waiting-for-approval = Twoje konto oczekuje na zatwierdzenie przez administratora. Proszę czekać...
+waiting-for-approval = Twoje konto oczekuje na zatwierdzenie przez administratora.
 account-approved-welcome = Twoje konto zostało zatwierdzone! Witaj w PlayPalace!
 account-declined-goodbye = Twoja prośba o konto została odrzucona.
     Powód:

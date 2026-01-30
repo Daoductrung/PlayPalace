@@ -796,8 +796,8 @@ class AdministrationMixin:
                 waiting_user.set_approved(True)
 
                 waiting_state = self._user_states.get(username, {})
-                if waiting_state.get("menu") == "waiting_for_approval":
-                    # User is online and waiting - welcome them and show main menu
+                if waiting_state.get("menu") == "main_menu":
+                    # User is online and waiting - welcome them and show full main menu
                     waiting_user.speak_l("account-approved-welcome")
                     waiting_user.play_sound("accountapprove.ogg")
                     self._show_main_menu(waiting_user)
