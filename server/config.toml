@@ -33,29 +33,29 @@ names = [
 ]
 
 # Timing settings (in ticks, 50ms each = 20 ticks/sec)
-min_idle_ticks = 100      # 5 sec minimum between actions when idle
-max_idle_ticks = 600      # 30 sec maximum between actions when idle
-min_online_ticks = 1200   # 1 min minimum online before considering going offline
-max_online_ticks = 6000   # 5 min maximum online
-min_offline_ticks = 600   # 30 sec minimum offline
-max_offline_ticks = 3000  # 2.5 min maximum offline
-leave_game_delay_ticks = 200  # 10 sec - spread bot departures after game ends
-start_game_delay_ticks = 400  # 20 sec - wait for players before starting
+min_idle_ticks = 20       # 1 sec minimum between actions when idle
+max_idle_ticks = 60       # 3 sec maximum between actions when idle
+min_online_ticks = 1000000    # Effectively keep bots online indefinitely
+max_online_ticks = 1000000    # Effectively keep bots online indefinitely
+min_offline_ticks = 0     # Irrelevant when bots never go offline
+max_offline_ticks = 0     # Irrelevant when bots never go offline
+leave_game_delay_ticks = 0    # Don't stagger departures once required
+start_game_delay_ticks = 200  # 10 sec - wait for players before starting
 
 # Behavior probabilities (per decision tick when idle)
-join_game_chance = 0.3    # Chance to try joining an existing game
-create_game_chance = 0.1  # Chance to try creating a new game
-go_offline_chance = 0.05  # Chance to go offline (when online long enough)
+join_game_chance = 0.6    # Chance to try joining an existing game
+create_game_chance = 0.2  # Chance to try creating a new game
+go_offline_chance = 0.0   # Bots remain online indefinitely
 
 # Post-game logout behavior
-logout_after_game_chance = 0.33    # 33% chance to log off after finishing a game
-logout_after_game_min_ticks = 40   # 2 sec minimum delay before logout
-logout_after_game_max_ticks = 100  # 5 sec maximum delay before logout
+logout_after_game_chance = 0.0     # Bots never log off after finishing a game
+logout_after_game_min_ticks = 0    # No logout delay needed
+logout_after_game_max_ticks = 0    # No logout delay needed
 
 # Maximum tables virtual bots can own per game type (0 = unlimited)
 # This limit applies to each game type separately.
 # E.g., if set to 2, bots can own up to 2 scopa tables AND 2 ninetynine tables, etc.
-max_tables_per_game = 0
+max_tables_per_game = 1
 # Default guided-table seat bounds for bots that don't have profile overrides
 min_bots_per_table = 0
 max_bots_per_table = 0
@@ -66,7 +66,7 @@ waiting_max_ticks = 100
 # Behavior when no guided-table rule applies
 #   "default"  - bots fall back to the probabilistic join/create logic
 #   "disabled" - bots stay idle/offline unless a guided slot explicitly needs them
-fallback_behavior = "default"
+fallback_behavior = "disabled"
 # Default profile applied to bots without an explicit profile assignment
 default_profile = "default"
 # Allocation policy when total bot pool can't satisfy all guided min_bots
@@ -76,7 +76,7 @@ allocation_mode = "best_effort"
 
 [virtual_bots.profiles.default]
 # Profiles inherit any keys omitted here from the top-level [virtual_bots] block
-min_bots_per_table = 4
+min_bots_per_table = 0
 max_bots_per_table = 4
 
 
@@ -99,4 +99,3 @@ bot_groups = ["all_bots"]
 min_bots = 4
 max_bots = 4
 priority = 10
-
