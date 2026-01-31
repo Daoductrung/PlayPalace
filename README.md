@@ -118,6 +118,45 @@ The `[virtual_bots]` section now supports deterministic "guided tables" for stag
 
 See `server/config.example.toml` for a complete annotated sample that keeps four bots glued to a Crazy Eights table while rotating a mixer profile across a Scopa lounge during half of each scheduling cycle.
 
+#### Example: Single-Game Stress Test With Bots
+
+To hammer a single game with an always-on crew of bots (useful for load testing rules, UI, or translations), drop a minimal config like this into `server/config.toml`:
+
+```toml
+[virtual_bots]
+names = ["Alex", "Jordan", "Taylor", "Morgan"]
+min_idle_ticks = 20      # 1s
+max_idle_ticks = 60      # 3s
+min_online_ticks = 1000000
+max_online_ticks = 1000000
+go_offline_chance = 0.0
+logout_after_game_chance = 0.0
+max_tables_per_game = 1
+fallback_behavior = "disabled"
+
+[virtual_bots.profiles.default]
+min_bots_per_table = 0
+max_bots_per_table = 4
+
+[virtual_bots.bot_groups.all_bots]
+bots = ["Alex", "Jordan", "Taylor", "Morgan"]
+
+[[virtual_bots.guided_tables]]
+table = "Crazy Table"
+game = "crazyeights"
+bot_groups = ["all_bots"]
+min_bots = 4
+max_bots = 4
+priority = 10
+```
+
+Key behaviors:
+- Bots make a decision every 1–3 seconds and never voluntarily log off, so the lobby and table stay hot.
+- `max_tables_per_game = 1` plus a single guided-table entry pins every bot to Crazy Eights; nothing else can spawn.
+- `fallback_behavior = "disabled"` keeps any unassigned bots offline, eliminating random tables when testing.
+
+This setup is ideal when you want to observe repeated starts/finishes of one game (e.g., Crazy Eights) without human supervision.
+
 ## Project Structure
 
 The server and client are separate codebases with different philosophies.
